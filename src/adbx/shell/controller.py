@@ -60,6 +60,8 @@ from .help import link_spans, topic, wrap_topic
 from .indexes import IndexSession, RangeSession
 from .labels import LabelDesigner
 from .letters import LetterEditor
+from .messages import check_style
+from .messages import protected as protected_message
 from .records import RecordSession
 from .relational import RelationalSession
 from .reports import ReportDesigner, ReportPreview
@@ -2091,8 +2093,7 @@ class ShellController:
                      else (self.database.name if self.database is not None
                            else ""))
         if owner and is_protected(workspace, owner, kind):
-            self._notice(f"{kind} for {owner} are protected. "
-                         "Use Applications, Prevent/allow file alterations.")
+            self._notice(protected_message(kind, owner))
             return True
         return False
 
@@ -3945,7 +3946,7 @@ class ShellController:
 
     # -- overlay ---------------------------------------------------------
     def _notice(self, text: str) -> None:
-        self.overlay = Overlay("message", text=text)
+        self.overlay = Overlay("message", text=check_style(text))
 
     def _open_help(self, topic_id: str, *, push: bool = False) -> None:
         stack: list[str] = []

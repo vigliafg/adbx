@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adbx"
-version = "0.1.0.dev0"
+version = "1.0.0"
 description = "Clone funzionale moderno di Alpha Four v3: database a celle di caratteri su SQLite"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -14,6 +14,9 @@ keywords = ["database", "alpha-four", "sqlite", "tui", "retro", "report"]
 classifiers = [
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Database",
 ]
 dependencies = ["PyQt6>=6.7"]
@@ -23,6 +26,9 @@ dev = ["pytest>=7.2", "ruff>=0.4"]
 
 [project.scripts]
 adbx = "adbx.__main__:main"
+
+[project.urls]
+Documentation = "https://github.com/vigliafg/adbx/blob/main/README.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]

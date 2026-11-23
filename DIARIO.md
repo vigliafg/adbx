@@ -796,11 +796,44 @@ Formato:
 
 ---
 
-## RIPRESA — checkpoint O12
+### 2026-11-23 — Ondata O13 — Conformità 1.0
+- Stato: completata — release **1.0.0**
+- Branch/commit: `main`.
+- Obiettivo: suite delle 25 lezioni, messaggi armonizzati, prestazioni,
+  packaging, documentazione utente.
+- File toccati: nuovi `tests/test_tutorial_25.py` (25 lezioni),
+  `tests/test_performance.py`, `tests/test_packaging.py`,
+  `src/adbx/shell/messages.py`, `tools/benchmark.py`,
+  `tools/build_release.sh`, `docs/manuale-utente.md`, `docs/CHANGELOG.md`;
+  aggiornati `conftest.py` (nessuno skip), `pyproject.toml` e
+  `src/adbx/__init__.py` (1.0.0), `.github/workflows/ci.yml`, `README.md`.
+- Scelte:
+  - **Una prova per lezione** (1–25) e controllo automatico che siano tutte
+    presenti.
+  - **Nessuno skip ammesso**: `pytest_collection_modifyitems` fallisce se
+    compare un test saltato.
+  - **Messaggi** normalizzati da `messages.check_style` (spazi e punto
+    finale) e testi comuni in `messages.py`.
+  - **Prestazioni** con soglie larghe (3.000 record, indice, search, report,
+    update) e benchmark riproducibile.
+  - **Packaging** 1.0.0, wheel/sdist con `build_release.sh`, CI su 3.11–3.13
+    con benchmark.
+  - **Manuale utente** completo e changelog.
+- Test: **480 passed**, nessuno saltato; `uvx ruff check src tests tools`
+  pulito; `./start.sh --smoke` e `--version` verdi; benchmark 200 record
+  sotto 0,1 s per operazione.
+- Problemi aperti / deviazioni dichiarate: restano quelle delle ondate
+  precedenti, raccolte in `docs/manuale-utente.md` §13 e nelle specifiche.
+- Prossimo passo: release 1.0 pubblicata e manutenzione.
 
-- Ultimo commit: O12 (configurazione e stampa).
-- Test: 444 verdi; ruff pulito; smoke e version verdi.
-- Specifiche: `docs/spec/14-config-stampa.md`; screenshot `51`–`56`.
-- Prossimo obiettivo: O13 — conformità 1.0: suite delle 25 lezioni in CI,
-  messaggi armonizzati, prestazioni, packaging, documentazione utente.
+---
+
+## RIPRESA — checkpoint O13 — release 1.0.0
+
+- Ultimo commit: O13 (conformità 1.0).
+- Test: 480 verdi, nessuno saltato; ruff pulito; smoke e version verdi.
+- Specifiche: tutte in `docs/spec/`; manuale `docs/manuale-utente.md`;
+  changelog `docs/CHANGELOG.md`.
+- CI: Python 3.11–3.13, lint, test, smoke, rendering, benchmark.
+- Obiettivo raggiunto: release 1.0.
 

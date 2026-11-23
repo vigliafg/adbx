@@ -9,8 +9,10 @@ finestra con una griglia di caratteri scalabile (132×43, font TrueType), su un 
 su Linux, Windows e macOS.
 
 - Licenza: MIT
-- Stato: **O12 completata** — configurazione, stampa, colori e documentazione
+- Stato: **1.0.0** — conformità alle 25 lezioni del Tutorial
 - Piano completo: [`PLAN.md`](PLAN.md)
+- Manuale utente: [`docs/manuale-utente.md`](docs/manuale-utente.md)
+- Note di release: [`docs/CHANGELOG.md`](docs/CHANGELOG.md)
 - Diario di implementazione: [`DIARIO.md`](DIARIO.md)
 - Inventario funzionale estratto dai manuali:
   [`docs/reference/00-inventario.md`](docs/reference/00-inventario.md)
@@ -51,6 +53,8 @@ script e designer molto più semplici e fedeli.
 python -m adbx --smoke            # avvio headless di verifica
 pytest                            # suite completa
 python tools/capture_ui.py        # rendering canonici
+python tools/benchmark.py         # prestazioni
+tools/build_release.sh            # wheel e sdist 1.0
 ```
 
 La shell parte dal **Database Directory**: si sceglie un `.DBF`/`.SET`, si
@@ -181,6 +185,12 @@ del driver attivo e il flusso testuale applica i codici e l'avanzamento.
 `Other → Set screen colors` salva i 18 token del tema per database o set.
 `Other → Documentation` genera report di struttura database/set, field rules,
 applicazioni e script in anteprima e PDF.
+
+Con **O13** arriva la release **1.0.0**: la suite di conformità copre tutte e
+25 le lezioni del Tutorial, senza test saltati; i messaggi passano da uno
+stile unico; i benchmark fissano soglie di prestazione; la CI gira su Python
+3.11–3.13 con lint, test, smoke, rendering e benchmark; il manuale utente e il
+changelog accompagnano il pacchetto.
 
 ## Riferimenti
 
