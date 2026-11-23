@@ -1,225 +1,542 @@
 # adbx
 
+[![CI](https://github.com/vigliafg/adbx/actions/workflows/ci.yml/badge.svg)](https://github.com/vigliafg/adbx/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue)](docs/CHANGELOG.md)
+[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](pyproject.toml)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 Clone funzionale moderno di **Alpha Four versione 3** (Alpha Software, 1993):
 un database relazionale senza programmazione, con regole di campo, set,
 report, script e applicazioni.
 
-adbx non emula il DOS: replica **il comportamento** di Alpha Four dentro una
-finestra con una griglia di caratteri scalabile (132×43, font TrueType), su un motore SQLite,
-su Linux, Windows e macOS.
+adbx **non emula il DOS**. Replica il comportamento di Alpha Four dentro una
+finestra moderna con una griglia di caratteri scalabile **132×43**, font
+TrueType **DejaVu Sans Mono** e motore **SQLite**, su Linux, Windows e macOS.
+I file `.DBF` restano interoperabili.
 
-- Licenza: MIT
-- Stato: **1.0.0** — conformità alle 25 lezioni del Tutorial
-- Piano completo: [`PLAN.md`](PLAN.md)
-- Manuale utente: [`docs/manuale-utente.md`](docs/manuale-utente.md)
-- Note di release: [`docs/CHANGELOG.md`](docs/CHANGELOG.md)
-- Diario di implementazione: [`DIARIO.md`](DIARIO.md)
-- Inventario funzionale estratto dai manuali:
-  [`docs/reference/00-inventario.md`](docs/reference/00-inventario.md)
-- Manuali originali (documentazione proprietaria, solo consultazione):
-  [`docs/reference/manuals/`](docs/reference/manuals/)
-- Specifiche: motore a celle [`docs/spec/00-motore-celle.md`](docs/spec/00-motore-celle.md),
-  scalabilità [`docs/spec/01-scalabilita.md`](docs/spec/01-scalabilita.md),
-  shell [`docs/spec/02-shell.md`](docs/spec/02-shell.md),
-  dati e immissione [`docs/spec/04-dati-immissione.md`](docs/spec/04-dati-immissione.md),
-  ricerca e indici [`docs/spec/05-ricerca-indici.md`](docs/spec/05-ricerca-indici.md),
-  regole di campo [`docs/spec/06-regole-campo.md`](docs/spec/06-regole-campo.md),
-  set e regioni [`docs/spec/07-set.md`](docs/spec/07-set.md),
-  form designer [`docs/spec/08-form.md`](docs/spec/08-form.md),
-  report engine [`docs/spec/09-report.md`](docs/spec/09-report.md),
-  etichette e lettere [`docs/spec/10-etichette-lettere.md`](docs/spec/10-etichette-lettere.md),
-  utility e I/O [`docs/spec/11-utility-io.md`](docs/spec/11-utility-io.md),
-  script [`docs/spec/12-script.md`](docs/spec/12-script.md),
-  applicazioni [`docs/spec/13-applications.md`](docs/spec/13-applications.md),
-  configurazione e stampa [`docs/spec/14-config-stampa.md`](docs/spec/14-config-stampa.md),
-  ambiente DOS di riferimento
-  [`docs/spec/03-ambiente-dos-riferimento.md`](docs/spec/03-ambiente-dos-riferimento.md)
-- Schermate: [`docs/render/`](docs/render/)
+> **Stato:** release **1.0.0** — conformità alle 25 lezioni del Tutorial,
+> 480 test verdi, nessun test saltato.
 
-## Perché una griglia di caratteri
+![Alpha Four main menu](docs/render/01-main-menu.png)
+
+---
+
+## Indice
+
+- [Perché adbx](#perché-adbx)
+- [Funzionalità](#funzionalità)
+- [Requisiti](#requisiti)
+- [Installazione](#installazione)
+- [Avvio rapido](#avvio-rapido)
+- [Interfaccia e tastiera](#interfaccia-e-tastiera)
+- [Dati e workspace](#dati-e-workspace)
+- [Script](#script)
+- [Applicazioni](#applicazioni)
+- [Configurazione e stampa](#configurazione-e-stampa)
+- [Architettura](#architettura)
+- [Struttura del repository](#struttura-del-repository)
+- [Test e qualità](#test-e-qualità)
+- [Prestazioni](#prestazioni)
+- [Screenshot](#screenshot)
+- [Documentazione](#documentazione)
+- [Compatibilità e deviazioni](#compatibilità-e-deviazioni)
+- [Backup](#backup)
+- [Sviluppo](#sviluppo)
+- [Licenza](#licenza)
+
+---
+
+## Perché adbx
 
 Alpha Four è una matrice di celle: report a larghezza fissa, regioni
 scorrevoli, designer a placeholder, script che «digitano» tasti e verificano
-il contenuto dello schermo. Rendere questa interfaccia con widget moderni
-cambierebbe il prodotto; renderla con celle la conserva e rende report,
-script e designer molto più semplici e fedeli.
+il contenuto dello schermo.
 
-## Avvio
+Rendere questa interfaccia con widget moderni cambierebbe il prodotto.
+Renderla con celle la conserva e rende report, script e designer molto più
+semplici e fedeli. adbx segue questa idea fino in fondo:
+
+- **griglia di celle** con carattere, colore, blink, bold e underline;
+- **un solo gestore di tastiera**: anche gli script passano da lì;
+- **semantica record-based** con cancellazione logica, `PACK`, ordine da
+  indice primario;
+- **SQLite** come motore, **`.DBF`** come formato di scambio;
+- **determinismo**: ogni scelta con più esiti ammessi è fissata da un test.
+
+## Funzionalità
+
+| Area | Cosa c'è |
+|---|---|
+| Database | fino a 128 campi, 4.000 caratteri per record, memo, password, table designer, riconfigurazione con conversione tipi |
+| Record | View, Enter, Change, Browse, cancellazione/richiamo, memo editor, clipboard, Find, Locate, Replace |
+| Indici | indici a più livelli, filtro, maiuscole, duplicati, primary index, 26 range, search/sort salvati e one-time |
+| Field rules | default, incrementi, template, maschere, required, validation, double entry, skip, calcolati, summary, lookup table/database/cascading/conditional, post data, re-evaluate |
+| Set | fino a 10 database, link `First`/`Last`/`Closest`/`All`, integrità referenziale, cascading update/delete, `Include Parent If`, regioni 1:N, zoom |
+| Form | fino a 26 form, 25 schermate, campi, testi, riquadri, regioni, calcolati, summary, formattazione, form attivo |
+| Report | 40–240 colonne, 9 livelli di gruppo, summary 7×3×4×2, multipass, widow/orphan, split lines, PDF |
+| Etichette | fino a 26 layout, 10–78 colonne, 1–20 righe, 6 etichette per riga, giustificazioni avanzate, PDF |
+| Lettere | editor con campi, espressioni, prompt, comandi di pagina, condizionali annidati, PDF |
+| Utility | Copy, Append (4 modalità), Summarize, Pack, Zap, Crosstab, Post, Join, Intersect, Subtract |
+| I/O | dBASE II, dBASE III/IV, ASCII separato, CSV, ASCII tabellare, DIF, SYLK, Lotus WKS/WK1, WordPerfect, MultiMate |
+| Script | keystroke, dialog box, menu bar, registrazione, Screen Test, 40+ comandi, variabili, trigger, debugger |
+| Applicazioni | outline, parametri, banner, macro, simulazione, Call-App/GotO-App, password, protezioni |
+| Configurazione | `config.json`, default settings, date europee, 26 driver di stampa, colori per database, documentazione |
+| Qualità | 480 test, 25 lezioni del Tutorial, CI 3.11–3.13, ruff, smoke, benchmark, screenshot canonici |
+
+### Anteprime
+
+| Report | Form | Applicazione |
+|---|---|---|
+| ![Report preview](docs/render/26-report-preview.png) | ![Custom form](docs/render/22-custom-form.png) | ![Application runtime](docs/render/48-app-runtime.png) |
+
+## Requisiti
+
+- **Python 3.11+** (testato su 3.11–3.13; lo sviluppo locale usa 3.14).
+- **PyQt6 ≥ 6.7**.
+- Linux con le librerie Qt di sistema:
+
+  ```bash
+  sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1
+  ```
+
+- Windows e macOS: nessuna libreria aggiuntiva oltre a PyQt6.
+- Per i PDF non servono dipendenze esterne: il writer è incluso.
+- DOSBox-X è opzionale e serve solo a confrontare l'originale.
+
+## Installazione
+
+### Avvio senza installazione manuale
 
 ```bash
-./start.sh                        # avvia senza attivare un ambiente (crea .venv se serve)
-./start.sh --data ~/dati          # parte dalla cartella indicata
-./start.sh --open ~/dati/AVMOVIES.DBF  # apre subito un database
-python -m adbx --smoke            # avvio headless di verifica
-pytest                            # suite completa
-python tools/capture_ui.py        # rendering canonici
-python tools/benchmark.py         # prestazioni
-tools/build_release.sh            # wheel e sdist 1.0
+git clone https://github.com/vigliafg/adbx.git
+cd adbx
+./start.sh
 ```
 
-La shell parte dal **Database Directory**: si sceglie un `.DBF`/`.SET`, si
-naviga con le frecce, si filtra con `*` e `?`, e con ENTER si arriva al main
-menu. `F1` apre l'aiuto contestuale, `F2`/`F3` mostrano struttura e stato,
-`ALT-F10` torna al menu, `Quit` chiude la sessione.
+`start.sh` sceglie l'interprete, crea `.venv` alla prima esecuzione e installa
+il pacchetto con le dipendenze. Non serve attivare l'ambiente a mano.
 
-Con **O2** i database sono vivi: `F5` nel Database Directory crea un database
-(il table designer definisce fino a 128 campi), `View/enter records` apre
-View, Enter, Change e Browse, `ALT-M` apre il memo, `ALT-D`/`ALT-U`
-cancellano e richiamano record, `Utilities → Pack` compatta. I dati stanno
-in SQLite e vengono riscritti nel `.DBF` a ogni salvataggio.
+### Installazione classica
 
-Con **O3** si cerca e si ordina: `Indexes/ranges` crea indici anche a più
-livelli, sceglie il primary index e salva fino a 26 range; `Search/sort lists`
-costruisce liste one-time o salvate in Table/Expression mode, con storia e
-marcatura `♦` quando sono out of date; in View/Browse `F` è Find, `L` è
-Locate, `I` è l'indice, `R` il range, e in View `S` sostituisce un testo.
-`Global update/delete → Delete duplicate records` usa l'indice primario.
+```bash
+python -m venv .venv
 
-Con **O4** il database diventa dichiarativo: `Database/set design → Field
-rules` definisce valori calcolati, default, incrementi automatici, template e
-maschere, campi obbligatori, validazioni con messaggio, doppia immissione,
-skip, prompt, post data e lookup. Le lookup possono essere tabelle (fino a 6
-colonne), database con mapping, cascate ad albero o liste condizionali;
-`F3` apre le scelte durante l'immissione e riempie i campi collegati.
-`Re-evaluate field rules` applica calcoli e maiuscole ai record esistenti.
+# Linux / macOS
+source .venv/bin/activate
+# Windows (PowerShell)
+.venv\Scripts\Activate.ps1
 
-Con **O5** più database diventano una sola vista: `Set commands` crea set con
-fino a 10 database, link `First/Last/Closest/All`, indice di collegamento e
-campo comune, integrità referenziale con cascading updates/deletes e
-`Include Parent If`. `View/enter records` su un set combina primario e figli
-uno-a-uno, mostra i figli uno-a-molti in una regione dedicata (F6) e permette
-lo zoom sul figlio (`Alt-Z`). Enter/Change aggiornano il genitore e i figli
-modificabili; il delete cascata sui figli collegati.
+python -m pip install --upgrade pip
+pip install -e ".[dev]"
+```
 
-Con **O6** le schermate diventano disegnabili: `Layouts → Forms` crea fino a
-26 form per database o set, su 10 pagine, con campi, testi, riquadri, regioni
-1:N, campi calcolati e summary. `F2` inserisce un campo, `F8` un riquadro,
-`F6` una regione, `F9` le opzioni di formattazione, `F7` i parametri
-(descrizione, menu, restrict, stampa). Il form salvato diventa attivo e
-View/Enter/Change lo usano, rispettando l'ordine dei campi e il formato memo
-multilinea.
+Su Windows, senza `start.sh`:
 
-Con **O7** arriva la stampa: `Layouts → Reports` crea fino a 26 report per
-database o set, larghi 40–240 colonne, con nove livelli di gruppo. Il layout è
-diviso in sezioni (report/page header, titles, group header/footer, detail,
-page footer, summary); i campi possono essere normali, `Unique`, calcolati o
-summary (`First`, `Last`, `Count`, `Biggest`, `Smallest`, `Total`, `Average`
-per `Grand`, `Page` o `Group n`, con `Ignore` e modo `Running`/
-`Pre-processed`). Il motore fa più passate per i calcoli che dipendono dai
-summary, impagina con margini, widow/orphan, split lines e massimo record per
-pagina, e applica i formati del manuale (maiuscole, word wrap, valuta,
-migliaia, numeri in lettere, date). `F10 → Save and preview` mostra
-l'anteprima; `P`/`F10` scrive un PDF; `Print → Report` stampa un report
-salvato. La stessa sezione `Detail` lunga quanto il modulo e i formati `$*` /
-`X$F` coprono i check writing.
+```powershell
+python -m adbx --data C:\dati
+```
 
-Con **O8** si stampano anche etichette e lettere. `Layouts → Mail labels`
-progetta fino a 26 layout da 10–78 colonne e 1–20 righe, fino a sei etichette
-per riga, con copie per record e le giustificazioni avanzate `Suppress`,
-`Float`, `Trim`, `Join`, `Before` e `After`; le righe vuote spariscono, quelle
-forzate con `CHR(127)` restano. `Layouts → Letters` è un editor di lettere con
-marcatori `[CAMPO]`, `[{espressione}]`, `[?prompt]`, comandi `[.WIDTH]`,
-`[.LEFT]`, `[.TOP]`, `[.FILL+]`, `[.EJECT]`, `[.INCLUDE]`, `[@codici]` e
-condizionali `[.IF]` / `[.ELSEIF]` / `[.ELSE]` / `[.ENDIF]` annidati. Sia le
-etichette sia le lettere si vedono in anteprima, si stampano in PDF e si
-stampano da `Print`.
+### Verifica
 
-Con **O9** arrivano le utility sui dati e lo scambio con l'esterno.
-`Utilities → Copy database` copia tutti o alcuni campi in un nuovo database,
-anche da un set, con il range attivo; `Append to database` ha le quattro
-modalità del manuale (`All`, `Unique`, `Replace existing, add unique`,
-`Replace existing, mark unique`) con filtro e mappatura dei campi;
-`Summarize database` raggruppa per primary index e calcola `Group`, `Total`,
-`Count`, `Average`, `Biggest`, `Smallest`, `First`, `Last`, `Null`;
-`Cross Tabulation` incrocia due campi con colonne automatiche o esplicite e
-un names database; `Relational commands` esegue `Post`, `Join`, `Intersect`
-e `Subtract`; `Pack` e `Zap` chiudono la manutenzione. `Global update/delete`
-aggiorna fino a 20 campi con espressioni, cambia maiuscole e cancella o
-richiama un range.
+```bash
+python -m adbx --version     # adbx 1.0.0
+python -m adbx --smoke       # griglia 132x43 e digest
+```
 
-`Utilities → Import data` ed `Export data` leggono e scrivono dieci formati:
-dBASE II, dBASE III/IV, ASCII separato, CSV, ASCII tabellare a colonne
-fisse, DIF, SYLK, Lotus WKS/WK1, WordPerfect merge e MultiMate. Ogni formato
-ha una prova di andata e ritorno; le impostazioni ASCII (separatore,
-virgolette, intestazione, spazi finali) e la Field Adjust permettono di
-correggere tipi e lunghezze prima di creare il database.
+## Avvio rapido
 
-Con **O10** il prodotto diventa programmabile. `ALT-F3` apre il menu degli
-script, `ALT-F4` suona uno script, `ALT-F1` registra `UNTITLED` e `ALT-F2` lo
-riproduce; nell'editor `F3`/`F4` registrano da capo o in coda e `F5`/`F6`
-definiscono il *Screen Test*. Il motore esegue i comandi del capitolo 18 —
-`IF`, `CASE`, `LOOP`, `GOTO`, `SET`, `PLAY`, `PROMPT`, `READ`, `WRITE`,
-`WAIT*`, `XLOOKUP*`, `TRIGKEYS`, `ONKEY`, `ONERROR`, `ONMAIN`, i comandi
-mouse, suono e schermo — e inietta i tasti nello stesso gestore dell'input
-reale. Le variabili `%NOME` e `%SYS_*` hanno i limiti del manuale; i 22 eventi
-di trigger si attivano con `%SYS_TRIG_*`; `AUTOEXEC`, gli script
-`nomeDB!`, `CTRL-F1..F10` e il comando `Tools` sono agganciati al guscio.
-Il designer dei dialog box gestisce Prompt, Button e Display; quello dei menu
-bar sostituisce il menu di View/Browse; il debugger avanza un token con `F10`.
-Il dialog runtime esegue le azioni dei Button e riporta i valori nelle
-variabili.
+```bash
+./start.sh                              # Database Directory
+./start.sh --data ~/dati                # cartella dati
+./start.sh --open ~/dati/AVMOVIES.DBF   # apre un database
+./start.sh --open ~/dati/ALPHAVID.SET   # apre un set
+./start.sh --app AVSYSTEM               # avvia un'applicazione
+./start.sh --smoke --dump               # dump completo della griglia
+```
 
-Con **O11** si costruiscono applicazioni complete. `Applications` permette di
-eseguire, creare, modificare e cancellare applicazioni e di proteggere i
-supporting files. L'editor ha due finestre: l'outline indentato dei menu e i
-parametri della voce (testo, help line, azione, target, macro, password, help
-file). Le voci possono aprire sottomenu, eseguire macro, chiamare
-un'applicazione e tornarvi (`Call-App`, fino a 10 livelli) oppure saltare a
-un'altra (`GotO-App`); il `Menu flow` decide se tornare, restare o avanzare.
-`F8` simula i menu senza eseguire le azioni, `F3` registra la macro e `F4`
-apre il Macro Editor. Il banner painter gestisce testo e colori cella; il
-banner appare all'avvio. `Prevent/allow file alterations` blocca form,
-report, etichette, lettere, range, search/sort e regole di campo finché non
-vengono riabilitati. La riga di comando `--app NOME` avvia direttamente
-un'applicazione.
+La sessione parte dal **Database Directory**:
 
-Con **O12** arriva la configurazione. `config.json` conserva default settings,
-ultimo database, path e stampante; `Other → Default settings` gestisce
-separatore e formato data (americano/europeo), auto flush, pattern matching,
-prevent change/enter, single step enters, lock delle utility e compatibilità
-dBASE IV. `Other → Printer configuration` installa fino a 26 driver A–Z scelti
-da un catalogo di 26 modelli, con codici decimali di setup, close-out, bold,
-italic, underline e compressed, righe per pagina, avanzamento `Formfeed`,
-`Sheetfeeder` o `Linefeed`, margini e porta; i PDF rispettano margini e font
-del driver attivo e il flusso testuale applica i codici e l'avanzamento.
-`Other → Set screen colors` salva i 18 token del tema per database o set.
-`Other → Documentation` genera report di struttura database/set, field rules,
-applicazioni e script in anteprima e PDF.
+1. scegliere un `.DBF` o `.SET` con le frecce;
+2. filtrare con `*` e `?`;
+3. aprire con `ENTER`;
+4. usare le hot key del main menu o le frecce + `ENTER`;
+5. `Quit` chiude la sessione, `ALT-F10` torna al menu.
 
-Con **O13** arriva la release **1.0.0**: la suite di conformità copre tutte e
-25 le lezioni del Tutorial, senza test saltati; i messaggi passano da uno
-stile unico; i benchmark fissano soglie di prestazione; la CI gira su Python
-3.11–3.13 con lint, test, smoke, rendering e benchmark; il manuale utente e il
-changelog accompagnano il pacchetto.
+## Interfaccia e tastiera
 
-## Riferimenti
+| Tasto | Funzione |
+|---|---|
+| `F1` | aiuto contestuale |
+| `F2` | struttura del database |
+| `F3` | status screen |
+| `F10` | continua / salva |
+| `ESC` / tasto destro | annulla un livello |
+| `ALT-F10` | main menu |
+| `ALT-F3` | menu Scripts |
+| `ALT-F4` | suona uno script |
+| `ALT-F1` / `ALT-F2` | registra / suona `UNTITLED` |
+| `CTRL-F1…F10` | suona `CTRLF1…CTRLF10` |
+| `ALT-M` | memo editor |
+| `ALT-D` / `ALT-U` | cancella / richiama record |
+| `F` / `L` / `I` / `R` / `S` | Find / Locate / Index / Range / Replace |
+| `T` | Tools in View/Browse |
 
-La specifica è la documentazione originale di Alpha Four 3.0 (`Reference
-Manual`, 25 capitoli e 8 appendici; `Tutorial Manual`, 25 lezioni). Il
-riassunto operativo, con limiti, funzioni, comandi di script, trigger, tasti
-ed estensioni di file, è in `docs/reference/00-inventario.md`.
+I nomi dei comandi del main menu sono API della tastiera: la lettera
+maiuscola è la hot key (`V`, `P`, `S`, `I`, `G`, `C`, `D`, `L`, `A`, `U`,
+`O`, `Q`).
 
-## Riferimento originale in DOSBox-X
+## Dati e workspace
 
-L'originale si può avviare senza installare il DOS, per confrontare
-comportamenti e schermate:
+Il workspace è una cartella dati. Il file nascosto `.adbx.sqlite` conserva:
+
+- catalogo database, campi, password;
+- record, memo, cancellazione logica;
+- indici, range, search/sort;
+- set, form, report, etichette, lettere;
+- field rules, impostazioni, colori, protezioni.
+
+Il `.DBF` resta la sorgente e il formato di scambio: viene importato al primo
+accesso e riscritto a ogni salvataggio esplicito.
+
+| Alpha Four | adbx |
+|---|---|
+| `.DBF` | tabella `t_<db>` + `__seq` + `__deleted` |
+| `.DBT` memo | tabella `m_<db>(seq, field, body)` |
+| numero record | posizione in ordine di `__seq` |
+| `PACK` | delete fisico + rinumerazione |
+| `.NDX` | tabella `i_<idx>(key, seq)` + definizione |
+| `.SET` | tabella `sets` (JSON) |
+| form, report, regole, script, app | JSON nel workspace o in `objects/` |
+
+I numeri sono testo canonico (19 cifre, 14 decimali), le date `YYYYMMDD`, i
+logici `0/1` con blank ammesso.
+
+## Script
+
+Tre tipi di script:
+
+- **keystroke** — tasti e comandi, con registrazione e Screen Test;
+- **dialog box** — Prompt, Button, Display;
+- **menu bar** — menu alternativo per form e browse table.
+
+Esempio:
+
+```text
+{SCREENOFF}
+{WRITE 5,10,"Good morning... opening the databases"}
+COAVMOVIES{ENTER}
+COAVPATRON{ENTER}
+COALPHAVID
+{SCREENON}
+{TONE 160,40}{TONE 250,80}{TONE 160,120}
+```
+
+Regole principali:
+
+- i caratteri comuni sono tasti;
+- `{COMANDO argomenti}` è un comando;
+- `{*testo*}` è un commento;
+- `:A` è una label;
+- i blocchi si annidano, forma canonica `{{COMANDO ...}}`;
+- `%NOME` è una variabile, `@%NOME` l'indirezione.
+
+Comandi implementati: `ABORT`, `ALLOWKEYS`, `BEEP`, `CANCEL`, `CASE`, `CLEAR`,
+`DEBUGOFF`, `DEBUGON`, `ENDAPP`, `EXEC`, `EXECCLR`, `GOTO`, `IF`, `LOOP`,
+`MAINMENU`, `MOUSEDCLICK`, `MOUSEDOWN`, `MOUSEMOVE`, `MOUSEUP`, `NOCLEAR`,
+`ONERROR`, `ONESCAPE`, `ONKEY`, `ONMAIN`, `PAUSE`, `PLAY`, `PROMPT`, `READ`,
+`RPL`, `SCREENFREEZE`, `SCREENOFF`, `SCREENON`, `SET`, `SHOW`, `TONE`,
+`TOOLEND`, `TRIGKEYS`, `VRESTORE`, `VSAVE`, `WAITFOR`, `WAITKEY`, `WAITSCRN`,
+`WAITUNTIL`, `WRITE`, `XLOOKUP`, `XLOOKUPC`, `XLOOKUPR`.
+
+I trigger si attivano con:
+
+```text
+{SET %SYS_TRIG_REC_SAVE,"SAVEWHAT"}
+```
+
+e si disattivano con `""`. Sono supportati i 22 eventi del manuale: record,
+regioni, campi, lettere, search/sort, update, zoom.
+
+Punti di aggancio:
+
+- `AUTOEXEC` parte all'avvio;
+- `<primi 7 caratteri>!` parte all'apertura di un database/set;
+- `CTRL-F1…F10`;
+- `Tools` in View/Browse;
+- `PLAY` annidato fino a 10 livelli;
+- debugger con `F10` (un token), `F5` (fino alla fine), `F3` (variabili).
+
+## Applicazioni
+
+Un'applicazione sostituisce il main menu con menu e sottomenu personali.
+
+- **Sub-Menu** apre un altro menu;
+- **Macro** esegue tasti e comandi;
+- **Call-App** chiama un'altra applicazione e vi torna (max 10 livelli);
+- **GotO-App** passa a un'altra applicazione senza tornare.
+
+Ogni voce può avere help line, help file ASCII e password. Il `Menu flow`
+dell'intestazione decide se, dopo un'azione, tornare (`Return`), restare
+(`Stay`) o avanzare (`Advance`).
+
+L'editor offre:
+
+- outline indentato con intestazioni `=`;
+- pannello parametri della voce;
+- `F2` aggiunge, `F5` cancella;
+- `F3` registra la macro, `F4` apre il Macro Editor;
+- `F6` dipinge il banner;
+- `F8` simula senza eseguire;
+- `F10` salva.
+
+`Prevent/allow file alterations` protegge Forms, Browse tables, Reports, Mail
+labels, Letters, Ranges, Search/Sort lists e Field rules per database o set.
+
+## Configurazione e stampa
+
+`config.json` nella cartella di avvio è l'equivalente di `A4.DFL`:
+
+```json
+{
+  "defaults": {
+    "date_separator": "/",
+    "date_format": "American",
+    "pattern": "exact",
+    "prevent_change": false,
+    "prevent_enter": false
+  },
+  "printers": {
+    "drivers": {},
+    "default": ""
+  }
+}
+```
+
+`Other` contiene:
+
+- **Pattern matching** — Exact, Case, Case-insensitive;
+- **Default settings** — date, auto flush, prevent change/enter, single step,
+  lock, dBASE IV, monocromatico;
+- **Printer configuration** — 26 driver A–Z da 26 modelli, codici decimali,
+  righe per pagina, avanzamento `Formfeed`/`Sheetfeeder`/`Linefeed`, margini,
+  porta;
+- **Set screen colors** — 18 token del tema per database o set;
+- **Documentation** — struttura database/set, field rules, applicazioni,
+  script, anteprima e PDF.
+
+I PDF rispettano margini e font del driver attivo. Il flusso testuale applica
+setup, close-out e avanzamento carta.
+
+## Architettura
+
+```text
+config/   configurazione, stampanti, colori
+cell/     buffer di celle, colori, CP437, renderer
+screen/   scena, popup, dialog, menu, status, help, tastiera
+data/     SQLite, DBF, record, indici, range, memo, regole, report
+app/      applicazioni, menu, banner, runtime, protezioni
+script/   modello, parser, variabili, motore, trigger, store
+shell/    controller, sessioni, designer, schermate, configurazione
+io/       import/export legacy e moderni
+render/   Qt, PDF
+docs/     specifiche, manuale, reference, render
+```
+
+### Flusso di un evento
+
+```text
+Qt key event
+  → screen.keys.Key
+  → ShellController.handle
+  → sessione attiva (record, designer, report, script...)
+  → View (griglia di celle)
+  → CellRenderer (QPainter)
+```
+
+Il motore di script inietta i tasti nello stesso `ShellController.handle`:
+non esiste un secondo percorso di input.
+
+## Struttura del repository
+
+```text
+adbx/
+├── src/adbx/
+│   ├── app/          applicazioni
+│   ├── cell/         celle e colori
+│   ├── config/       defaults, printer, colors
+│   ├── data/         SQLite, DBF, indici, regole, report engine
+│   ├── docs/         generatore di documentazione
+│   ├── io/           formati di import/export
+│   ├── render/       renderer Qt e PDF
+│   ├── screen/       tastiera e input Qt
+│   ├── script/       motore di script
+│   └── shell/        controller e schermate
+├── tests/            480 test, 25 lezioni, performance, packaging
+├── docs/
+│   ├── spec/         specifiche tecniche
+│   ├── reference/    inventario e manuali originali
+│   ├── render/       56 screenshot canonici
+│   ├── manuale-utente.md
+│   └── CHANGELOG.md
+├── tools/            capture, benchmark, release, DOSBox
+├── PLAN.md           piano e architettura
+├── DIARIO.md         diario delle ondate
+└── start.sh
+```
+
+## Test e qualità
+
+```bash
+python -m pytest                 # suite completa
+python -m pytest tests/test_tutorial_25.py
+uvx ruff check src tests tools
+python -m adbx --smoke
+QT_QPA_PLATFORM=offscreen python tools/capture_ui.py --out /tmp/render
+python tools/benchmark.py --records 5000
+tools/build_release.sh
+```
+
+La suite include:
+
+- **25 test**, uno per lezione del Tutorial;
+- test del motore di script, di ogni comando e dei trigger;
+- test di andata e ritorno per dieci formati di import/export;
+- test di performance con soglie larghe;
+- test di packaging e documentazione;
+- un hook che **rifiuta i test saltati** (`skip`/`skipif`).
+
+CI GitHub Actions su Python **3.11, 3.12 e 3.13**: lint, test, smoke,
+rendering canonico e benchmark.
+
+## Prestazioni
+
+Benchmark riproducibile su 5.000 record (macchina di sviluppo, SQLite locale):
+
+```bash
+python tools/benchmark.py --records 5000
+```
+
+Il test di performance verifica 3.000 record per append, indice, ordered scan,
+search, report e update con soglie pensate per la CI, non per il desktop.
+
+## Screenshot
+
+Tutte le schermate canoniche sono in [`docs/render/`](docs/render/); vengono
+rigenerate da `tools/capture_ui.py`.
+
+| | | |
+|---|---|---|
+| ![Main menu](docs/render/01-main-menu.png) | ![Directory](docs/render/02-directory.png) | ![View records](docs/render/07-view-records.png) |
+| ![Table designer](docs/render/09-designer.png) | ![Field rules](docs/render/14-field-rules.png) | ![Set editor](docs/render/18-set-editor.png) |
+| ![Form designer](docs/render/21-form-designer.png) | ![Report preview](docs/render/26-report-preview.png) | ![Labels](docs/render/29-label-preview.png) |
+| ![Script editor](docs/render/40-script-editor.png) | ![Dialog designer](docs/render/41-dialog-designer.png) | ![Application editor](docs/render/47-app-editor.png) |
+| ![Printer driver](docs/render/54-printer-driver.png) | ![Screen colors](docs/render/55-screen-colors.png) | ![Documentation](docs/render/56-documentation.png) |
+
+## Documentazione
+
+- [Manuale utente](docs/manuale-utente.md)
+- [Changelog](docs/CHANGELOG.md)
+- [Piano e architettura](PLAN.md)
+- [Diario di implementazione](DIARIO.md)
+- [Inventario funzionale](docs/reference/00-inventario.md)
+- Specifiche tecniche:
+  [motore a celle](docs/spec/00-motore-celle.md),
+  [scalabilità](docs/spec/01-scalabilita.md),
+  [shell](docs/spec/02-shell.md),
+  [ambiente DOS](docs/spec/03-ambiente-dos-riferimento.md),
+  [dati e immissione](docs/spec/04-dati-immissione.md),
+  [ricerca e indici](docs/spec/05-ricerca-indici.md),
+  [regole di campo](docs/spec/06-regole-campo.md),
+  [set](docs/spec/07-set.md),
+  [form](docs/spec/08-form.md),
+  [report](docs/spec/09-report.md),
+  [etichette e lettere](docs/spec/10-etichette-lettere.md),
+  [utility e I/O](docs/spec/11-utility-io.md),
+  [script](docs/spec/12-script.md),
+  [applicazioni](docs/spec/13-applications.md),
+  [configurazione e stampa](docs/spec/14-config-stampa.md).
+
+## Compatibilità e deviazioni
+
+adbx è una reimplementazione indipendente, non un emulatore DOS.
+
+Esclusioni dichiarate:
+
+- runtime cifrato, `A4ENC`, `A4EXEMKR`;
+- installer DOS, `SETUP.DTA`;
+- multiuser, `A4.NET`, locking DOS;
+- Novell, NetBIOS, Banyan, Lantastic;
+- dialer Hayes e `MODEM.CFG`;
+- swap EMS/XMS e parametri `CONFIG.SYS`;
+- `.NDX` in scrittura (solo lettura);
+- `A4LIB`, `SCRIPTED`;
+- `PFS:File`, DBMII, Multiplan.
+
+Deviazioni consapevoli:
+
+- form fino a 25 schermate (il manuale stampato ne dichiara 10);
+- colori di campo 0–255 mappati su 16 colori DOS;
+- support files in JSON/SQLite, non file proprietari;
+- numeri in testo canonico, non `REAL`;
+- script in JSON leggibile, non `.SCP` binario;
+- `EXEC`, `EXECCLR` e `RPL` non eseguono programmi DOS;
+- attese degli script cooperative, senza bloccare l'event loop Qt;
+- i driver di stampa alimentano PDF e stream testuali, non porte LPT/COM;
+- niente stampa diretta: PDF e file sono i canali di uscita;
+- MultiMate come documento testuale, non codifica binaria originale.
+
+Dettagli completi in [`PLAN.md`](PLAN.md) §2 e nel manuale utente §13.
+
+## Backup
+
+1. Chiudere adbx.
+2. Copiare l'intera cartella dati, inclusi `.DBF`, `.DBT` e `.adbx.sqlite`.
+3. Conservare anche `config.json` e le cartelle `objects/`.
+
+Copiare solo il `.DBF` non conserva regole, form, report, script e
+applicazioni: quelle definizioni vivono nel workspace.
+
+## Sviluppo
+
+```bash
+git clone https://github.com/vigliafg/adbx.git
+cd adbx
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+
+uvx ruff check src tests tools
+python -m pytest
+python tools/capture_ui.py --out /tmp/render
+python tools/benchmark.py --records 1000
+```
+
+Il progetto segue il piano a ondate in [`PLAN.md`](PLAN.md). Ogni modifica
+deve mantenere:
+
+- test verdi e nessuno skip;
+- ruff pulito;
+- smoke e version verdi;
+- documentazione e specifica aggiornate;
+- screenshot canonici rigenerati quando cambia la UI.
+
+L'originale DOS si può avviare per confronto:
 
 ```bash
 sudo apt-get install dosbox-x
-tools/run_alpha4_dosbox.sh           # estrae da DRIVEC TERZA VERSIONE.zip e avvia
+tools/run_alpha4_dosbox.sh
 ```
 
-Verificato: DOSBox-X 2026.01.02, macchina `svga_s3`, 16 MB, `A4.EXE` arriva
-al main menu con `AVMOVIES` (50 record). Dettagli e screenshot in
-[`docs/spec/03-ambiente-dos-riferimento.md`](docs/spec/03-ambiente-dos-riferimento.md).
-L'archivio DOS e i suoi file restano fuori dal repository.
+Verificato con DOSBox-X 2026.01.02, `svga_s3`, 16 MB. I file del programma
+originale non sono inclusi nel repository.
 
-## Licenza dei materiali di riferimento
+## Licenza
 
-Codice e documentazione prodotta sono MIT. I PDF in
-`docs/reference/manuals/` sono manuali Alpha Software depositati **solo per
-consultazione** e non sono coperti dalla licenza MIT. I file del programma
-originale non sono inclusi.
+Codice e documentazione prodotta sono distribuiti con licenza **MIT**
+([`LICENSE`](LICENSE)).
+
+I PDF in `docs/reference/manuals/` sono manuali Alpha Software depositati
+**solo per consultazione** e non sono coperti dalla licenza MIT. I file del
+programma originale non sono inclusi.
 
 Alpha Four è un marchio di Alpha Software Corporation. Questo progetto è una
 reimplementazione indipendente, non affiliata né autorizzata; non contiene
