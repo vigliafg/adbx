@@ -9,3 +9,7 @@ dist/
 .ruff_cache/
 *.pdf
 !docs/**/*.pdf
+
+# archivio originale fornito dall'utente (non versionato)
+/DRIVEC.zip
+/DRIVEC/
