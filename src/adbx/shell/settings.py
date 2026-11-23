@@ -15,6 +15,7 @@ from ..config.colors import (
     save_colors,
 )
 from ..config.defaults import PATTERNS, DefaultSettings
+from ..config.display import clamp_zoom
 from ..config.printers import (
     LETTERS,
     PAGE_ADVANCE,
@@ -74,6 +75,7 @@ class DefaultsSession:
         ("Data path", "data_path", "text"),
         ("Last database", "last_database", "text"),
         ("Default printer", "printer_default", "text"),
+        ("Screen zoom %", "screen_zoom", "int"),
     )
 
     def __post_init__(self) -> None:
@@ -142,6 +144,13 @@ class DefaultsSession:
         value = self.edit_text
         if kind == "bool":
             setattr(self.defaults, attr, value.strip().upper().startswith("Y"))
+        elif kind == "int":
+            try:
+                number = int(value.strip())
+            except ValueError:
+                self.status = "Screen zoom: a number from 50 to 200."
+                return
+            self.defaults.screen_zoom = clamp_zoom(number)
         elif attr == "pattern":
             lower = value.strip().lower()
             if lower in PATTERNS:
@@ -182,7 +191,7 @@ class DefaultsSession:
         draw_status_line(buffer, self.theme, self.status or
                          "ENTER changes or advances; F10 saves")
         draw_help_line(buffer, self.theme,
-                       "Defaults apply to dates, comparison, entry and locks.")
+                       "Defaults apply to dates, comparison, entry, locks and zoom.")
         regions = draw_menu_line(buffer, self.theme,
                                  [("F10", "Save"), ("ESC", "Cancel")])
         return View(buffer, regions)

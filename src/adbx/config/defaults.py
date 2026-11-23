@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .display import ZOOM_DEFAULT, clamp_zoom
 from .printers import PrinterConfig, load_printers, save_printers
 
 CONFIG_FILE = "config.json"
@@ -33,6 +34,7 @@ class DefaultSettings:
     data_path: str = ""
     last_database: str = ""
     printer_default: str = ""
+    screen_zoom: int = ZOOM_DEFAULT
 
     def __post_init__(self) -> None:
         self.date_separator = (self.date_separator or "/")[:1]
@@ -41,6 +43,7 @@ class DefaultSettings:
                             else "American")
         if self.pattern not in PATTERNS:
             raise ConfigError(f"Unknown pattern matching: {self.pattern}")
+        self.screen_zoom = clamp_zoom(self.screen_zoom)
 
     @property
     def european_dates(self) -> bool:

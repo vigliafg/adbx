@@ -20,3 +20,11 @@ def test_version(capsys):
         main(["--version"])
     except SystemExit as exc:
         assert exc.code == 0
+
+
+def test_window_module_is_not_shadowed_by_the_app_package():
+    from adbx.app.window import MainWindow, ScreenWidget, run
+
+    assert callable(run)
+    assert MainWindow.__name__ == "MainWindow"
+    assert ScreenWidget.__name__ == "ScreenWidget"

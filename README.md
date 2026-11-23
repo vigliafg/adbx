@@ -177,6 +177,9 @@ La sessione parte dal **Database Directory**:
 | `ALT-F4` | suona uno script |
 | `ALT-F1` / `ALT-F2` | registra / suona `UNTITLED` |
 | `CTRL-F1…F10` | suona `CTRLF1…CTRLF10` |
+| `CTRL-+` / `CTRL--` | zoom della finestra (50–200%) |
+| `CTRL-0` | zoom al 100% |
+| `F11` | full screen |
 | `ALT-M` | memo editor |
 | `ALT-D` / `ALT-U` | cancella / richiama record |
 | `F` / `L` / `I` / `R` / `S` | Find / Locate / Index / Range / Replace |
@@ -185,6 +188,14 @@ La sessione parte dal **Database Directory**:
 I nomi dei comandi del main menu sono API della tastiera: la lettera
 maiuscola è la hot key (`V`, `P`, `S`, `I`, `G`, `C`, `D`, `L`, `A`, `U`,
 `O`, `Q`).
+
+La griglia resta **132×43** a ogni dimensione della finestra: cambia il corpo
+del font, non il layout. Il corpo automatico si ferma a **24 px logici** per
+lasciare margini leggibili sugli schermi grandi; `CTRL-+` / `CTRL--` spostano
+lo zoom a passi del 10% (50–200%) e `CTRL-0` lo riporta al 100%. Lo zoom non
+taglia mai la griglia: oltre il massimo consentito dalla finestra il titolo
+mostra `(max)`. Il livello è salvato in `config.json` (`screen_zoom`) e si può
+modificare anche da `Other → Default settings`.
 
 ## Dati e workspace
 

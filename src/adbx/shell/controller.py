@@ -17,7 +17,8 @@ from ..app.runtime import ApplicationRuntime
 from ..app.store import ApplicationStore
 from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ROW
 from ..config.colors import theme_for
-from ..config.defaults import ConfigStore
+from ..config.defaults import ConfigError, ConfigStore
+from ..config.display import clamp_zoom
 from ..config.printers import configure_printer
 from ..data import indexing
 from ..data import rules as field_rules
@@ -399,6 +400,22 @@ class ShellController:
         self._autostart()
         if application:
             self._open_application_session_by_name(application)
+
+    # -- scala della finestra -------------------------------------------
+    @property
+    def screen_zoom(self) -> int:
+        """Livello di zoom della finestra, in percentuale."""
+        return clamp_zoom(self.config_file.defaults.screen_zoom)
+
+    def set_screen_zoom(self, value: int) -> int:
+        """Salva lo zoom della finestra; non fallisce se il file è protetto."""
+        value = clamp_zoom(value)
+        self.config_file.defaults.screen_zoom = value
+        try:
+            self.config_file.save()
+        except ConfigError:
+            pass
+        return value
 
     # -- accesso alle schermate -----------------------------------------
     def view(self) -> View:

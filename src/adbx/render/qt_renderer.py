@@ -23,6 +23,8 @@ class CellRenderer:
         self.family = family or monospace_family()
         self.palette = palette
         self.dpr = 1.0
+        self.base_pixel_size = MIN_PIXEL_SIZE
+        self.zoom_limited = False
         self._pixel_size_dev = 0
         self._atlases: dict[tuple[int, bool], QImage] = {}
         self._prepare(max(MIN_PIXEL_SIZE, int(pixel_size)))
@@ -54,11 +56,17 @@ class CellRenderer:
                 and self.line_height * rows <= height * self.dpr)
 
     def fit(self, width: float, height: float, cols: int, rows: int,
-            dpr: float = 1.0) -> None:
-        """Sceglie il corpo più grande che fa stare la griglia nella finestra.
+            dpr: float = 1.0, *, ceiling: float | None = None,
+            zoom: float = 1.0) -> None:
+        """Sceglie il corpo che fa stare la griglia nella finestra.
 
         Le celle derivano dalle metriche del font, non da un fattore di scala:
         il testo non viene mai stirato.
+
+        `ceiling` limita il corpo naturale (in pixel di dispositivo) per
+        lasciare margini su schermi molto grandi; `zoom` è un fattore
+        applicato a quel corpo, ma non supera mai il massimo che entra nella
+        finestra: la griglia non viene mai tagliata.
         """
         self.dpr = max(0.5, float(dpr))
         width = max(1.0, width)
@@ -70,7 +78,14 @@ class CellRenderer:
                 best = candidate
             elif candidate > MIN_PIXEL_SIZE:
                 break
-        self._prepare(best)
+        base = best
+        if ceiling is not None:
+            base = max(MIN_PIXEL_SIZE, min(best, round(ceiling)))
+        requested = round(base * max(0.1, float(zoom)))
+        target = max(MIN_PIXEL_SIZE, min(best, requested))
+        self.base_pixel_size = base
+        self.zoom_limited = requested > best
+        self._prepare(target)
         self.cell_w = self.advance / self.dpr
         self.cell_h = self.line_height / self.dpr
 

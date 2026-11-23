@@ -37,7 +37,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        from .app import run
+        from .app.window import run
     except ImportError as exc:  # pragma: no cover
         print(f"PyQt6 non disponibile: {exc}", file=sys.stderr)
         return 2

@@ -854,11 +854,47 @@ Formato:
 
 ---
 
-## RIPRESA — checkpoint automazione DOSBox
+### 2026-11-23 — Zoom della finestra e tetto di leggibilità
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: dare all'utente il controllo della scala (scelta prima rigida) e
+  fermare il corpo automatico a una dimensione leggibile, lasciando margini.
+- File toccati: nuovo `src/adbx/config/display.py` (limiti e clamp dello
+  zoom), `src/adbx/render/qt_renderer.py` (`fit` con `ceiling` e `zoom`, mai
+  oltre il massimo che entra), `src/adbx/app/window.py` (spostato da
+  `src/adbx/app.py`, scorciatoie `CTRL-+`/`CTRL--`/`CTRL-0`, titolo con zoom e
+  `(max)`), `src/adbx/config/defaults.py` (`screen_zoom` in `config.json`),
+  `src/adbx/shell/controller.py` (`screen_zoom`, salvataggio),
+  `src/adbx/shell/settings.py` (riga «Screen zoom %»), `src/adbx/__main__.py`;
+  test in `tests/test_render.py`, `test_config.py`, `test_config_ui.py`;
+  aggiornati `README.md`, `docs/spec/01-scalabilita.md`, `docs/CHANGELOG.md`.
+- Scelte:
+  - **24 px logici** come tetto automatico (`COMFORT_FONT_PX`), moltiplicato
+    per il `dpr`: su 4K/HiDPI il testo mantiene la stessa dimensione ottica.
+  - **Zoom come fattore** sul corpo con tetto, non dimensione assoluta: a
+    100% riempie, sotto lascia margini, sopra usa lo spazio che il tetto ha
+    lasciato, senza mai superare il massimo che entra nella finestra.
+  - **(max)** nel titolo quando il livello richiesto non è raggiungibile:
+    nessun inganno sulla scala effettiva.
+  - **GUI ripristinata**: `src/adbx/app.py` era ombreggiato dal pacchetto
+    `adbx/app/` e `python -m adbx` usciva con «PyQt6 non disponibile:
+    cannot import name 'run'». Il modulo è ora `adbx/app/window.py`, importato
+    esplicitamente da `__main__.py`.
+- Test: **490 passed**, nessuno saltato; ruff pulito; smoke, version e avvio
+  reale sotto Xvfb verificati.
+- Controllo visivo: screenshot offscreen a 100%, 70%, 150% (bloccato a
+  `(max)`) su finestra 1452×903 e 2400×1500, più la schermata Default
+  settings con la nuova riga e una cattura della finestra reale su Xvfb.
 
-- Ultimo commit: automazione DOSBox ed E2E visivi.
-- Test: 485 verdi, nessuno saltato; ruff pulito; smoke e version verdi.
+---
+
+## RIPRESA — checkpoint zoom della finestra
+
+- Ultimo commit: zoom utente, tetto di leggibilità e ripristino della GUI.
+- Test: 490 verdi, nessuno saltato; ruff pulito; smoke e version verdi.
 - Specifiche: tutte in `docs/spec/`; manuale `docs/manuale-utente.md`.
 - E2E: `docs/e2e/` con 8 schermate adbx e 2 catture dell'originale.
+- Controllo visivo: 1452×903 e 2400×1500 a 100/70/150/200%, finestra reale
+  su Xvfb e Default settings con «Screen zoom %».
 - CI: Python 3.11–3.13, lint, test, smoke, rendering, E2E, benchmark.
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## Non pubblicato
+
+- Finestra: tetto di leggibilità di 24 px logici con margini su schermi
+  grandi, zoom `CTRL-+` / `CTRL--` / `CTRL-0` (50–200%) salvato in
+  `config.json` (`screen_zoom`) e modificabile da Default settings.
+- Avvio: spostato il modulo della finestra in `adbx/app/window.py`; il file
+  `src/adbx/app.py` era ombreggiato dal pacchetto `adbx/app/` e la GUI non
+  partiva più (`cannot import name 'run'`).
+
 ## 1.0.0 — 2026-11-23
 
 Prima release di conformità.

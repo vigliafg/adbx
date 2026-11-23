@@ -168,3 +168,26 @@ def test_pattern_matching_saved_in_config(tmp_path):
     assert controller.workspace.pattern_mode == "case"
     config = ConfigStore(tmp_path)
     assert config.defaults.pattern == "case"
+
+
+def test_defaults_screen_zoom_edits_and_persists(tmp_path):
+    _workspace, database = make_db(tmp_path)
+    controller = ShellController(tmp_path, open_path=database.source)
+    open_other(controller, 1)
+    session = controller.defaults_session
+    session.selected = len(session.FIELDS) - 1
+    session._load()
+    assert session.edit_text == "100"
+    for _step in range(3):
+        controller.handle(Key("BACKSPACE"))
+    type_text(controller, "130")
+    controller.handle(Key("F10"))
+    assert controller.base == "menu"
+    assert controller.screen_zoom == 130
+    assert ConfigStore(tmp_path).defaults.screen_zoom == 130
+
+    reopened = ShellController(tmp_path, open_path=database.source)
+    assert reopened.screen_zoom == 130
+    reopened.set_screen_zoom(999)
+    assert reopened.screen_zoom == 200
+    assert ConfigStore(tmp_path).defaults.screen_zoom == 200

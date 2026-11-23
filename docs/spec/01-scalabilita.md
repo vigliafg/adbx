@@ -46,7 +46,7 @@ finestra come concetti distinti), osservazione diretta della finestra
 |---|---|---|
 | Font | Raster o TrueType (Lucida Console) | **TrueType incorporato**: DejaVu Sans Mono regular/bold, fallback al monospace di sistema |
 | Cella | metriche del font | metriche del font (`advance`, `ascent+descent`) |
-| Dimensione carattere | corpo scelto dall'utente | **corpo scelto automaticamente** per riempire la finestra |
+| Dimensione carattere | corpo scelto dall'utente | **corpo automatico** con tetto di leggibilità e **zoom 50–200%** |
 | Griglia | righe/colonne visibili = area / cella | **fissa 132×43**, perché gli script indirizzano celle assolute |
 | Riempimento | margine ai bordi | griglia centrata; margine nel colore di fondo |
 | Glifi | mai stirati | **mai stirati** |
@@ -79,10 +79,18 @@ alla geometria logica.
    `ascent + descent` (altezza cella).
 3. Si sceglie il corpo più grande per cui
    `132 × advance ≤ larghezza` **e** `43 × altezza ≤ altezza finestra`.
-4. Limiti: mai sotto 7 px (illeggibile), mai sopra 72 px.
-5. La griglia risultante è centrata nella finestra; i margini usano il colore
+4. Il corpo automatico si ferma a **24 px logici** (`COMFORT_FONT_PX`, in
+   pixel di dispositivo moltiplicati per il `devicePixelRatio`): su schermi
+   molto grandi il testo non diventa enorme e la griglia lascia margini.
+   Mai sotto 7 px (illeggibile), mai sopra 72 px.
+5. Lo zoom utente è un **fattore** su quel corpo: `CTRL-+` / `CTRL--` a passi
+   del 10% (50–200%), `CTRL-0` riporta al 100%, il livello è salvato in
+   `config.json` (`screen_zoom`). Lo zoom non supera mai il massimo che entra
+   nella finestra: la griglia non viene tagliata e il titolo mostra `(max)`
+   quando il livello richiesto non è raggiungibile.
+6. La griglia risultante è centrata nella finestra; i margini usano il colore
    di fondo dell'interfaccia, quindi non appaiono come barre nere.
-6. `F11` commuta il full screen; lo stesso algoritmo porta la griglia alla
+7. `F11` commuta il full screen; lo stesso algoritmo porta la griglia alla
    dimensione massima consentita dallo schermo.
 
 Il ridimensionamento della finestra cambia quindi il corpo del font a scatti

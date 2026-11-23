@@ -62,6 +62,21 @@ def test_config_store(tmp_path):
     assert again.printers.active.name == "Epson FX-850"
 
 
+def test_screen_zoom_is_clamped_and_persisted(tmp_path):
+    from adbx.config.display import ZOOM_DEFAULT, ZOOM_MAX, ZOOM_MIN
+
+    assert DefaultSettings().screen_zoom == ZOOM_DEFAULT
+    assert DefaultSettings(screen_zoom=130).screen_zoom == 130
+    assert DefaultSettings(screen_zoom=10).screen_zoom == ZOOM_MIN
+    assert DefaultSettings(screen_zoom=999).screen_zoom == ZOOM_MAX
+    assert DefaultSettings.from_dict({"screen_zoom": "140"}).screen_zoom == 140
+
+    store = ConfigStore(tmp_path)
+    store.defaults.screen_zoom = 130
+    store.save()
+    assert ConfigStore(tmp_path).defaults.screen_zoom == 130
+
+
 def test_printer_catalog_has_26_models_and_letters():
     assert len(PRINTER_MODELS) == 26
     assert len(LETTERS) == 26

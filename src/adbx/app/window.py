@@ -8,10 +8,11 @@ from PyQt6.QtCore import QPoint, Qt, QTimer
 from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget
 
-from .cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
-from .render.qt_renderer import CellRenderer
-from .screen.qt_input import key_from_qt
-from .shell.controller import ShellController
+from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
+from ..config.display import COMFORT_FONT_PX, ZOOM_DEFAULT, ZOOM_STEP, clamp_zoom
+from ..render.qt_renderer import CellRenderer
+from ..screen.qt_input import key_from_qt
+from ..shell.controller import ShellController
 
 MIN_WIDTH = 660
 MIN_HEIGHT = 420
@@ -25,6 +26,7 @@ class ScreenWidget(QWidget):
         self.controller = controller
         self.renderer = CellRenderer(pixel_size=16)
         self.blink_on = True
+        self._applied_zoom = clamp_zoom(controller.screen_zoom)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setMinimumSize(MIN_WIDTH, MIN_HEIGHT)
         self._timer = QTimer(self)
@@ -33,10 +35,34 @@ class ScreenWidget(QWidget):
 
     # -- scalabilita' ----------------------------------------------------
     def refit(self) -> None:
-        """Sceglie il corpo del font piu' grande che riempie la finestra."""
+        """Sceglie il corpo del font che riempie la finestra, con tetto e zoom."""
         dpr = self.devicePixelRatioF()
-        self.renderer.fit(self.width(), self.height(), SCREEN_WIDTH, SCREEN_HEIGHT, dpr)
+        zoom = self._zoom_percent()
+        self.renderer.fit(
+            self.width(), self.height(), SCREEN_WIDTH, SCREEN_HEIGHT, dpr,
+            ceiling=COMFORT_FONT_PX * dpr, zoom=zoom / 100)
+        self._applied_zoom = zoom
+        self._update_title()
         self.update()
+
+    def _zoom_percent(self) -> int:
+        return clamp_zoom(self.controller.screen_zoom)
+
+    def _update_title(self) -> None:
+        zoom = self._zoom_percent()
+        if zoom == ZOOM_DEFAULT:
+            self.window().setWindowTitle("adbx")
+            return
+        suffix = " (max)" if self.renderer.zoom_limited else ""
+        self.window().setWindowTitle(f"adbx — zoom {zoom}%{suffix}")
+
+    def _zoom(self, delta: int) -> None:
+        """Cambia il livello di zoom e lo salva; 0 ripristina il default."""
+        current = self._zoom_percent()
+        target = ZOOM_DEFAULT if delta == 0 else clamp_zoom(current + delta)
+        if target != current:
+            self.controller.set_screen_zoom(target)
+        self.refit()
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
@@ -72,6 +98,16 @@ class ScreenWidget(QWidget):
             window = self.window()
             window.showNormal() if window.isFullScreen() else window.showFullScreen()
             return
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            if event.key() in (Qt.Key.Key_Plus, Qt.Key.Key_Equal):
+                self._zoom(ZOOM_STEP)
+                return
+            if event.key() == Qt.Key.Key_Minus:
+                self._zoom(-ZOOM_STEP)
+                return
+            if event.key() == Qt.Key.Key_0:
+                self._zoom(0)
+                return
         key = key_from_qt(event)
         if key is None:
             super().keyPressEvent(event)
@@ -80,7 +116,10 @@ class ScreenWidget(QWidget):
         if self.controller.quit:
             self.window().close()
             return
-        self.update()
+        if self._zoom_percent() != self._applied_zoom:
+            self.refit()
+        else:
+            self.update()
 
     def _cell_at(self, position: QPoint) -> tuple[int, int]:
         origin_x, origin_y = self._origin()

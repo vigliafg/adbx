@@ -109,6 +109,37 @@ def test_fit_scales_with_window(qapp):
     assert big_w > small_w and big_h > small_h
 
 
+def test_fit_ceiling_leaves_margins(qapp):
+    from adbx.render.qt_renderer import CellRenderer
+
+    renderer = CellRenderer(pixel_size=12)
+    renderer.fit(3000, 2000, 132, 43, ceiling=24)
+    assert renderer.pixel_size == 24
+    assert not renderer.zoom_limited
+    width, height = renderer.grid_size(132, 43)
+    assert width < 3000 and height < 2000
+
+
+def test_fit_zoom_uses_slack_but_never_overflows(qapp):
+    from adbx.render.qt_renderer import CellRenderer
+
+    renderer = CellRenderer(pixel_size=12)
+    renderer.fit(3000, 2000, 132, 43, ceiling=24, zoom=1.5)
+    assert renderer.pixel_size > 24
+    width, height = renderer.grid_size(132, 43)
+    assert width <= 3000 and height <= 2000
+
+    renderer.fit(1452, 903, 132, 43, ceiling=24)
+    base = renderer.pixel_size
+    renderer.fit(1452, 903, 132, 43, ceiling=24, zoom=1.5)
+    assert renderer.pixel_size == base
+    assert renderer.zoom_limited
+
+    renderer.fit(1452, 903, 132, 43, ceiling=24, zoom=0.5)
+    assert renderer.pixel_size < base
+    assert not renderer.zoom_limited
+
+
 def test_cells_come_from_font_metrics(qapp):
     from adbx.render.qt_renderer import CellRenderer
 
