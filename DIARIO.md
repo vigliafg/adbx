@@ -156,3 +156,29 @@ Formato:
     allargando le celle, ma i glifi verrebbero stirati. Decisione rimandata.
   - La mappatura colori 0–255 → 16 resta provvisoria (palette `A4.PAL`).
 - Prossimo passo: O1 — shell.
+
+### 2026-11-23 — O0 — Materiale originale Alpha Four v3
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: verificare l'archivio fornito dall'utente (`DRIVEC TERZA
+  VERSIONE.zip`, 112 MB) e censire i riferimenti originali.
+- Contenuto trovato: `drivec/ALPHA4V3/` con `A4.EXE` (12/11/1993), `A4.PAL`,
+  `A4.DFL`, `A4HELP.HLP`, `A4DOC.EXE`, `README.DOC`, `PRINTER.DTA`; le cartelle
+  `TUTOR/`, `SAMPLE/`, `INVOICE/`. L'archivio è integro (`unzip -t`).
+- Dati del Tutorial disponibili: `AVMOVIES.DBF` (50 record, 11 campi),
+  `AVPATRON.DBF` (28, 17), `AVSALES.DBF` (109, 24), `AVSALES2.DBF` (16, 9),
+  più indici `.NDX`, script `.SCP`, set `ALPHAVID.SET`.
+- `A4.PAL`: 9.077 byte, intestazione `A4 10 0C`, palette con nome
+  (`ARIZONA`, `BERMUDA`, `CAPE COD`, …): sostituirà la mappatura provvisoria
+  `indice % 16` in O12.
+- `A4HELP.HLP`: intestazione `A4H 1A` seguita da una tabella di offset:
+  estraibile, servirà per i nomi esatti di aiuti e trigger.
+- Scelte: i file originali **non** entrano nel repository (licenza
+  proprietaria, repo MIT). Sono estratti in `/tmp/opencode/alpha4v3/` come
+  riferimento di lettura; nel repo finiranno solo specifiche e valori
+  derivati. `.gitignore` esclude gli archivi `/DRIVEC*.zip`.
+- Test: nessuno (solo ricognizione).
+- Problemi aperti: i dati reali hanno conteggi diversi da quelli inventati
+  nella schermata demo (`AVMOVIES` 50 record, non 44); si allineeranno quando
+  ci sarà il motore dati (O4).
+- Prossimo passo: O1 — shell.
