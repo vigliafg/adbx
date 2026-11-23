@@ -30,6 +30,15 @@ from adbx.data.forms import (  # noqa: E402
     FormLabel,
     FormRegion,
 )
+from adbx.data.report_engine import render_report  # noqa: E402
+from adbx.data.reports import (  # noqa: E402
+    ReportCalc,
+    ReportDefinition,
+    ReportField,
+    ReportGroup,
+    ReportSummary,
+    ReportText,
+)
 from adbx.data.rules import FieldRule, LookupTable, PostingRule  # noqa: E402
 from adbx.data.sets import Link, SetDefinition  # noqa: E402
 from adbx.data.workspace import Workspace  # noqa: E402
@@ -39,6 +48,7 @@ from adbx.shell.designer import DesignerSession  # noqa: E402
 from adbx.shell.forms import FormDesigner  # noqa: E402
 from adbx.shell.indexes import IndexSession, RangeSession  # noqa: E402
 from adbx.shell.records import RecordSession  # noqa: E402
+from adbx.shell.reports import ReportDesigner, ReportPreview  # noqa: E402
 from adbx.shell.rules import (  # noqa: E402
     LookupTableEditor,
     PostingEditor,
@@ -255,6 +265,61 @@ def main(argv: list[str] | None = None) -> int:
         form_designer_format.format_col = 2
         set_view = SetSession(set_definition, "view")
         set_browse = SetSession(set_definition, "browse")
+
+        movie_report = ReportDefinition(workspace, "AVMOVIES", "A",
+                                        "Movies by subject", 100)
+        movie_report.set_group_count(1)
+        movie_report.groups = [ReportGroup(1, "AVMOVIES.SUBJECT")]
+        movie_report.sections = ["page_header", "titles", "group1_header",
+                                 "detail", "group1_footer", "summary"]
+        movie_report.texts = [
+            ReportText("page_header", 1, 1, "Alpha Video Movies"),
+            ReportText("page_header", 1, 76, "Page"),
+            ReportText("titles", 1, 1, "Id    Title"),
+            ReportText("titles", 1, 50, "Subject"),
+            ReportText("titles", 1, 72, "Runtime"),
+            ReportText("group1_header", 1, 1, "Subject:"),
+            ReportText("group1_footer", 1, 1,
+                       "Movies in this subject:"),
+        ]
+        movie_report.fields = [
+            ReportField("page_header", 1, 84, "SYSTEM.PAGENUMBER",
+                        length=4),
+            ReportField("group1_header", 1, 10, "AVMOVIES.SUBJECT",
+                        length=25),
+            ReportField("detail", 1, 1, "AVMOVIES.TAPE_ID", length=6,
+                        data="Unique"),
+            ReportField("detail", 1, 7, "AVMOVIES.TAPE_TITLE", length=40,
+                        window=30, format="X"),
+            ReportField("detail", 1, 50, "AVMOVIES.SUBJECT", length=20,
+                        data="Unique"),
+            ReportField("detail", 1, 72, "AVMOVIES.RUNTIME", length=6,
+                        justification="R"),
+            ReportField("group1_footer", 1, 26, "SUMMARY.COUNT1",
+                        length=6, justification="R"),
+            ReportField("summary", 1, 1, "SUMMARY.TOTAL1", length=6,
+                        justification="R"),
+        ]
+        movie_report.summaries = [
+            ReportSummary("COUNT1", "AVMOVIES.TAPE_ID", "Count", "Group 1",
+                          "None", "Pre-processed"),
+            ReportSummary("TOTAL1", "AVMOVIES.RUNTIME", "Total", "Grand"),
+        ]
+        movie_report.calcs = [ReportCalc("PRICE2", "RENTPRICE * 2")]
+        movie_report.save()
+        report_designer = ReportDesigner(
+            workspace, database, owner="AVMOVIES", report=movie_report,
+            stage="layout")
+        report_designer.section = "detail"
+        report_designer.row = 1
+        report_designer.col = 7
+        report_grouping = ReportDesigner(
+            workspace, database, owner="AVMOVIES", report=movie_report,
+            stage="grouping")
+        report_output = render_report(movie_report, workspace)
+        report_preview = ReportPreview(
+            report_output, movie_report.label,
+            pdf_path=workspace.directory / "AVMOVIES-A.pdf")
         lookup_record = RecordSession(database, "enter")
         lookup_record.field_index = 3
         lookup_record._load_field()
@@ -291,6 +356,9 @@ def main(argv: list[str] | None = None) -> int:
             "22-custom-form": movie_view.view(),
             "23-set-form": set_form_view.view(),
             "24-formatting": form_designer_format.view(),
+            "25-report-designer": report_designer.view(),
+            "26-report-preview": report_preview.view(),
+            "27-report-grouping": report_grouping.view(),
         }
         for name, view in shots.items():
             image = renderer.to_image(view.buffer)

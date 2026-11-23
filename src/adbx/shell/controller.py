@@ -15,6 +15,7 @@ from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ROW
 from ..data import indexing
 from ..data import rules as field_rules
 from ..data.indexing import RECORD_NUMBER, SEARCH_PREFIX
+from ..data.report_engine import render_report
 from ..data.workspace import Database, Workspace, WorkspaceError
 from ..screen.keys import Key, character
 from ..screen.keys import parse as parse_key
@@ -25,6 +26,7 @@ from .forms import FormDesigner
 from .help import link_spans, topic, wrap_topic
 from .indexes import IndexSession, RangeSession
 from .records import RecordSession
+from .reports import ReportDesigner, ReportPreview
 from .rules import RulesSession
 from .searching import SearchSession
 from .sets import SetDesigner, SetSession
@@ -84,6 +86,20 @@ LAYOUT_ITEMS: tuple[tuple[str, str], ...] = (
     ("Forms", "forms"),
     ("Browse tables", "browse-tables"),
     ("Reports", "reports"),
+    ("Mail labels", "labels"),
+    ("Letters", "letters"),
+)
+
+REPORT_ITEMS: tuple[tuple[str, str], ...] = (
+    ("Create/edit a report", "create"),
+    ("Borrow a report", "borrow"),
+    ("Erase a report", "erase"),
+)
+
+PRINT_ITEMS: tuple[tuple[str, str], ...] = (
+    ("Report", "report"),
+    ("Form", "form"),
+    ("Browse table", "browse"),
     ("Mail labels", "labels"),
     ("Letters", "letters"),
 )
@@ -188,6 +204,8 @@ class ShellController:
         self.set_records: SetSession | None = None
         self.set_designer: SetDesigner | None = None
         self.form_designer: FormDesigner | None = None
+        self.report_designer: ReportDesigner | None = None
+        self.report_preview: ReportPreview | None = None
         self.pending_index_name = ""
         self.pending_locate_text = ""
         self.pending_replace: list[str] = []
@@ -223,6 +241,10 @@ class ShellController:
             base = self.set_designer.view()
         elif self.base == "formdesigner" and self.form_designer is not None:
             base = self.form_designer.view()
+        elif self.base == "reportdesigner" and self.report_designer is not None:
+            base = self.report_designer.view()
+        elif self.base == "reportpreview" and self.report_preview is not None:
+            base = self.report_preview.view()
         elif self.base == "directory":
             base = screens.directory(
                 self.state, self.cursor, self.input_text, self.input_cursor,
@@ -264,6 +286,8 @@ class ShellController:
                 "sets": "Set Commands",
                 "layouts": "Layouts",
                 "forms": "Forms",
+                "reports": "Reports",
+                "print": "Print",
             }.get(overlay.target, "Desktop Options")
             items = overlay.items or list(DESKTOP_ITEMS)
             return screens.submenu_overlay(base, items, overlay.selected,
@@ -317,6 +341,10 @@ class ShellController:
             self._handle_set_designer(key)
         elif self.base == "formdesigner":
             self._handle_form_designer(key)
+        elif self.base == "reportdesigner":
+            self._handle_report_designer(key)
+        elif self.base == "reportpreview":
+            self._handle_report_preview(key)
         elif self.base == "directory":
             self._handle_directory(key)
         elif self.base == "structure":
@@ -679,6 +707,13 @@ class ShellController:
             self.overlay = Overlay("submenu", items=list(LAYOUT_ITEMS),
                                    target="layouts")
             return
+        if topic_id == "print":
+            if self.database is None and self.active_set is None:
+                self._notice("Select a database or set first.")
+                return
+            self.overlay = Overlay("submenu", items=list(PRINT_ITEMS),
+                                   target="print")
+            return
         if topic_id == "utilities":
             self.overlay = Overlay("submenu", items=list(UTILITY_ITEMS),
                                    target="utilities")
@@ -964,6 +999,12 @@ class ShellController:
                     self.records.apply_range()
                 self._notice("Search/Sort List deleted.")
             return
+        if action.startswith("delete-report:"):
+            letter = action.split(":", 1)[1]
+            if self._workspace() is not None:
+                self._workspace().delete_report(self._form_owner(), letter)
+                self._notice(f"Report {letter} erased.")
+            return
         if action.startswith("delete-form:"):
             letter = action.split(":", 1)[1]
             if self._workspace() is not None:
@@ -1046,6 +1087,10 @@ class ShellController:
             self._layout_action(action)
         elif overlay.target == "forms":
             self._forms_action(action)
+        elif overlay.target == "reports":
+            self._reports_action(action)
+        elif overlay.target == "print":
+            self._print_action(action)
 
     def _design_action(self, action: str) -> None:
         if action == "create":
@@ -1093,6 +1138,10 @@ class ShellController:
             self.overlay = Overlay("submenu", items=list(FORM_ITEMS),
                                    target="forms")
             return
+        if action == "reports":
+            self.overlay = Overlay("submenu", items=list(REPORT_ITEMS),
+                                   target="reports")
+            return
         self.overlay = None
         self._notice(f"Layouts → {action} is not available yet (later wave).")
 
@@ -1139,6 +1188,99 @@ class ShellController:
             self._notice(f"Form {session.saved_form.letter} saved and active.")
         elif session.status:
             self._notice(session.status)
+
+    # -- report ----------------------------------------------------------
+    def _reports_action(self, action: str) -> None:
+        workspace = self._workspace()
+        owner = self._form_owner()
+        if workspace is None or not owner:
+            self._notice("Select a database or set first.")
+            return
+        if action == "create":
+            self.report_designer = ReportDesigner(
+                workspace, self.database, owner=owner, theme=self.theme)
+            self.overlay = None
+            self.base = "reportdesigner"
+            return
+        reports = workspace.reports(owner)
+        if action in ("borrow", "erase"):
+            if not reports:
+                self._notice("There are no reports for this database or set.")
+                return
+            items = [(report.label, report.letter) for report in reports]
+            self.overlay = Overlay(
+                "choose", text="Reports", items=items,
+                action="borrow-report" if action == "borrow" else
+                "erase-report")
+            return
+
+    def _print_action(self, action: str) -> None:
+        self.overlay = None
+        if action != "report":
+            self._notice("Printing forms, browse tables, labels and letters "
+                         "arrives with O8/O12.")
+            return
+        workspace = self._workspace()
+        owner = self._form_owner()
+        if workspace is None or not owner:
+            self._notice("Select a database or set first.")
+            return
+        reports = workspace.reports(owner)
+        if not reports:
+            self._notice("There are no reports for this database or set.")
+            return
+        items = [(report.label, report.letter) for report in reports]
+        self.overlay = Overlay("choose", text="Print report", items=items,
+                               action="print-report")
+
+    def _open_report_preview(self, report) -> None:
+        workspace = self._workspace()
+        if workspace is None:
+            return
+        try:
+            output = render_report(report, workspace)
+        except (ValueError, KeyError) as exc:
+            self._notice(f"Report not printable: {exc}")
+            return
+        target = workspace.directory / f"{report.owner}-{report.letter}.pdf"
+        self.report_preview = ReportPreview(
+            output, report.label, theme=self.theme, pdf_path=target)
+        self.base = "reportpreview"
+        self.overlay = None
+
+    def _handle_report_designer(self, key: Key) -> None:
+        session = self.report_designer
+        assert session is not None
+        if key.name == "F1" and not key.alt and session.picker is None:
+            self._open_help("reports")
+            return
+        session.handle(key)
+        if session.close:
+            self._finish_report_designer()
+
+    def _finish_report_designer(self) -> None:
+        session = self.report_designer
+        self.report_designer = None
+        self.base = "menu"
+        if session is None:
+            return
+        if session.preview_request and session.saved_report is not None:
+            self._open_report_preview(session.saved_report)
+            return
+        if session.saved and session.saved_report is not None:
+            self._notice(f"Report {session.saved_report.letter} saved.")
+        elif session.status:
+            self._notice(session.status)
+
+    def _handle_report_preview(self, key: Key) -> None:
+        session = self.report_preview
+        assert session is not None
+        if key.name == "F1":
+            return
+        session.handle(key)
+        if session.close:
+            self.report_preview = None
+            self.base = "menu"
 
     # -- set -------------------------------------------------------------
     def _set_action(self, action: str) -> None:
@@ -1694,6 +1836,26 @@ class ShellController:
                 theme=self.theme)
             self.base = "setdesigner"
             return
+        if action in ("borrow-report", "erase-report", "print-report"):
+            workspace = self._workspace()
+            if workspace is None:
+                return
+            report = workspace.get_report(self._form_owner(), value)
+            if report is None:
+                return
+            if action == "print-report":
+                self._open_report_preview(report)
+            elif action == "erase-report":
+                self.overlay = Overlay(
+                    "confirm", text=f"Erase report {value}?",
+                    action=f"delete-report:{value}")
+            else:
+                self.report_designer = ReportDesigner(
+                    workspace, self.database, owner=self._form_owner(),
+                    report=report, theme=self.theme, stage="borrow_letter",
+                    letter_text="", edit_existing=False)
+                self.base = "reportdesigner"
+            return
         if action in ("select-form", "erase-form"):
             if action == "select-form":
                 self._workspace().set_active_form(self._form_owner(), value)
@@ -2086,6 +2248,14 @@ class ShellController:
             self.form_designer = None
             self.base = "menu"
             return
+        if self.base == "reportdesigner" and self.overlay is None:
+            self.report_designer = None
+            self.base = "menu"
+            return
+        if self.base == "reportpreview" and self.overlay is None:
+            self.report_preview = None
+            self.base = "menu"
+            return
         if self.base in ("setrecords", "setdesigner") and self.overlay is None:
             if self.base == "setrecords":
                 self.set_records = None
@@ -2153,6 +2323,12 @@ def demo_controller() -> ShellController:
     controller.database = None
     controller.records = None
     controller.designer = None
+    controller.form_designer = None
+    controller.report_designer = None
+    controller.report_preview = None
+    controller.set_designer = None
+    controller.set_records = None
+    controller.active_set = None
     controller.clipboard = [""]
     controller.pending_path = None
     controller.base = "menu"

@@ -521,3 +521,50 @@ Formato:
   - Il titolo del campo è sopra il campo, non posizionabile separatamente.
   - I form dei database non hanno regioni; i summary usano i link 1:N dei set.
 - Prossimo passo: O7 — Report engine.
+
+---
+
+### 2026-11-23 — Ondata O7 — Report engine
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: stampare report a sezioni con gruppi, summary, formattazioni,
+  multipass, impaginazione, anteprima, PDF e check writing.
+- File toccati: nuovi `src/adbx/data/reports.py` (modello, sezioni, gruppi,
+  calcoli, summary, validazione, persistenza), `src/adbx/data/report_engine.py`
+  (raccolta record, multipass, formati, paginazione), `src/adbx/shell/reports.py`
+  (designer, parametri, gruppi, layout, calcolati, summary, formatting,
+  anteprima), `src/adbx/render/report_pdf.py` (PDF senza dipendenze),
+  specifica `docs/spec/09-report.md`, screenshot `25-report-designer.png`,
+  `26-report-preview.png`, `27-report-grouping.png`; aggiornati
+  `workspace.py` (tabella `adbx_reports` e metodi), `controller.py`
+  (Layouts → Reports, Print → Report, borrow/erase, sessioni), `help.py`,
+  `README.md`, `tools/capture_ui.py`; test nuovi `test_reports`,
+  `test_reports_ui`; aggiornato `test_shell_directory` per il menu Print.
+- Scelte:
+  - **Report in SQLite**, non file `.RPx`: proprietario, lettera, parametri,
+    sezioni, testi, campi, calcolati, summary e gruppi.
+  - **Sezioni del manuale**: report header sostituisce page header a pagina 1;
+    titles ripetibili; group header/footer annidati; summary finale.
+  - **Summary 7×3×4×2**: sette tipi, livelli Grand/Page/Group n, ignore
+    None/Empty/Zero/Both, modi Running/Pre-processed.
+  - **Multipass a punto fisso** (max quattro passate) per calcoli che usano
+    summary e summary che aggregano calcoli; paginazione ricalcolata finché
+    le pagine assegnate ai record non si stabilizzano.
+  - **Formati**: caratteri N/C/L/F/W/X/Y/Z/-; memo X/@; numerici $, virgola,
+    X, X$, con `*`, `B`, `-` e capitalizzazione; date 1–10.
+  - **Impaginazione**: page length, margini, page breaks, max records, blank
+    line dopo N record, split lines, widow/orphan, re-print group header,
+    substitute header/footer, reset pagina dopo gruppo.
+  - **Output**: anteprima a schermo e PDF Courier letter/landscape; Print →
+    Report per i report salvati.
+- Test: **283 passed**; `uvx ruff check src tests tools` pulito;
+  `./start.sh --smoke` e `--version` verdi. Accettazione report 1 e 2 del
+  Tutorial in `test_reports`; designer e anteprima in `test_reports_ui`.
+- Problemi aperti / deviazioni dichiarate:
+  - Niente file `.RPx`/`.SET`; range e stampa non sono memorizzati nel report.
+  - Separatore date `/` e valuta `Dollars` non configurabili fino a O12.
+  - `Borrow` resta nello stesso proprietario; l'orphan control non ridisegna
+    i record già stampati; substitute footer non emette form feed.
+  - Niente stampante diretta, driver o caratteri compressi: solo anteprima e
+    PDF.
+- Prossimo passo: O8 — etichette e lettere.

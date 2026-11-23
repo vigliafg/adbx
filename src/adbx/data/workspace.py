@@ -395,6 +395,14 @@ class Workspace:
                 updated REAL NOT NULL,
                 PRIMARY KEY (owner, letter)
             );
+            CREATE TABLE IF NOT EXISTS adbx_reports (
+                owner TEXT NOT NULL,
+                letter TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                definition TEXT NOT NULL,
+                updated REAL NOT NULL,
+                PRIMARY KEY (owner, letter)
+            );
             CREATE TABLE IF NOT EXISTS adbx_sets (
                 name TEXT PRIMARY KEY,
                 description TEXT NOT NULL DEFAULT '',
@@ -614,6 +622,54 @@ class Workspace:
         self._connection.commit()
         return cursor.rowcount > 0
 
+    # -- report ----------------------------------------------------------
+    def reports(self, owner: str) -> list:
+        from .reports import ReportDefinition
+
+        owner = owner.strip().upper()
+        result = []
+        for row in self._connection.execute(
+                "SELECT definition FROM adbx_reports WHERE owner = ? "
+                "ORDER BY letter", (owner,)):
+            try:
+                result.append(ReportDefinition.from_dict(
+                    self, json.loads(row["definition"])))
+            except (ValueError, TypeError):
+                continue
+        return result
+
+    def report_names(self, owner: str) -> list[str]:
+        return [report.label for report in self.reports(owner)]
+
+    def get_report(self, owner: str, letter: str):
+        from .reports import ReportDefinition
+
+        row = self._connection.execute(
+            "SELECT definition FROM adbx_reports WHERE owner = ? AND letter = ?",
+            (owner.strip().upper(), letter.strip().upper())).fetchone()
+        if row is None:
+            return None
+        return ReportDefinition.from_dict(self, json.loads(row["definition"]))
+
+    def save_report(self, report) -> None:
+        report.validate()
+        self._connection.execute(
+            "INSERT INTO adbx_reports (owner, letter, description, definition, "
+            "updated) VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(owner, letter) DO UPDATE SET "
+            "description = excluded.description, "
+            "definition = excluded.definition, updated = excluded.updated",
+            (report.owner, report.letter, report.description,
+             json.dumps(report.to_dict()), time.time()))
+        self._connection.commit()
+
+    def delete_report(self, owner: str, letter: str) -> bool:
+        cursor = self._connection.execute(
+            "DELETE FROM adbx_reports WHERE owner = ? AND letter = ?",
+            (owner.strip().upper(), letter.strip().upper()))
+        self._connection.commit()
+        return cursor.rowcount > 0
+
     # -- set -------------------------------------------------------------
     def set_names(self) -> list[str]:
         return [str(row[0]) for row in self._connection.execute(
@@ -681,6 +737,8 @@ class Workspace:
             "DELETE FROM adbx_field_rules WHERE owner = ?", (name,))
         self._connection.execute(
             "DELETE FROM adbx_forms WHERE owner = ?", (name,))
+        self._connection.execute(
+            "DELETE FROM adbx_reports WHERE owner = ?", (name,))
         self._connection.commit()
         return True
 
@@ -959,6 +1017,7 @@ class Workspace:
         self._connection.execute("DELETE FROM adbx_searches WHERE database = ?", (name,))
         self._connection.execute("DELETE FROM adbx_search_lists WHERE database = ?", (name,))
         self._connection.execute("DELETE FROM adbx_field_rules WHERE owner = ?", (name,))
+        self._connection.execute("DELETE FROM adbx_reports WHERE owner = ?", (name,))
         for set_row in self._connection.execute(
                 "SELECT name, primary_database FROM adbx_sets"):
             if str(set_row["primary_database"]) == name or any(

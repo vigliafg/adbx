@@ -156,11 +156,12 @@ def test_right_click_cancels(tmp_path):
     assert controller.base == "menu"
 
 
-def test_unavailable_commands_explain_the_wave(tmp_path):
+def test_print_menu_is_available(tmp_path):
     data = make_tutorial_set(tmp_path / "TUTOR")
     controller = ShellController(data)
     controller.handle(Key("DOWN"))
     controller.handle(Key("ENTER"))
     controller.handle(Key("P"))
-    assert controller.overlay.kind == "message"
-    assert "wave O7" in controller.overlay.text
+    assert controller.overlay.kind == "submenu"
+    assert controller.overlay.target == "print"
+    assert [item[1] for item in controller.overlay.items][0] == "report"

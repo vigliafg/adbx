@@ -9,7 +9,7 @@ finestra con una griglia di caratteri scalabile (132×43, font TrueType), su un 
 su Linux, Windows e macOS.
 
 - Licenza: MIT
-- Stato: **O6 completata** — form designer a celle, form personalizzati, regioni, calcolati e summary
+- Stato: **O7 completata** — report engine con sezioni, gruppi, summary, multipass, anteprima e PDF
 - Piano completo: [`PLAN.md`](PLAN.md)
 - Diario di implementazione: [`DIARIO.md`](DIARIO.md)
 - Inventario funzionale estratto dai manuali:
@@ -24,6 +24,7 @@ su Linux, Windows e macOS.
   regole di campo [`docs/spec/06-regole-campo.md`](docs/spec/06-regole-campo.md),
   set e regioni [`docs/spec/07-set.md`](docs/spec/07-set.md),
   form designer [`docs/spec/08-form.md`](docs/spec/08-form.md),
+  report engine [`docs/spec/09-report.md`](docs/spec/09-report.md),
   ambiente DOS di riferimento
   [`docs/spec/03-ambiente-dos-riferimento.md`](docs/spec/03-ambiente-dos-riferimento.md)
 - Schermate: [`docs/render/`](docs/render/)
@@ -88,6 +89,20 @@ Con **O6** le schermate diventano disegnabili: `Layouts → Forms` crea fino a
 (descrizione, menu, restrict, stampa). Il form salvato diventa attivo e
 View/Enter/Change lo usano, rispettando l'ordine dei campi e il formato memo
 multilinea.
+
+Con **O7** arriva la stampa: `Layouts → Reports` crea fino a 26 report per
+database o set, larghi 40–240 colonne, con nove livelli di gruppo. Il layout è
+diviso in sezioni (report/page header, titles, group header/footer, detail,
+page footer, summary); i campi possono essere normali, `Unique`, calcolati o
+summary (`First`, `Last`, `Count`, `Biggest`, `Smallest`, `Total`, `Average`
+per `Grand`, `Page` o `Group n`, con `Ignore` e modo `Running`/
+`Pre-processed`). Il motore fa più passate per i calcoli che dipendono dai
+summary, impagina con margini, widow/orphan, split lines e massimo record per
+pagina, e applica i formati del manuale (maiuscole, word wrap, valuta,
+migliaia, numeri in lettere, date). `F10 → Save and preview` mostra
+l'anteprima; `P`/`F10` scrive un PDF; `Print → Report` stampa un report
+salvato. La stessa sezione `Detail` lunga quanto il modulo e i formati `$*` /
+`X$F` coprono i check writing.
 
 ## Riferimenti
 
