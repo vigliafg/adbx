@@ -11,9 +11,15 @@ from dataclasses import dataclass, replace
 from .attrs import DEFAULT_BG, DEFAULT_FG, bright, resolve_color
 from .cp437 import DOUBLE, SHADE_LIGHT, SINGLE
 
-SCREEN_WIDTH = 80
-SCREEN_HEIGHT = 25
-WORK_ROWS = 22  # righe 1-22; 23 status, 24 help, 25 menu
+# Griglia logica SVGA: 132 colonne (modo testo largo) per 43 righe.
+SCREEN_WIDTH = 132
+SCREEN_HEIGHT = 43
+
+# Le tre righe di chrome sono ancorate in fondo, come nella console originale.
+STATUS_ROW = SCREEN_HEIGHT - 3
+HELP_ROW = SCREEN_HEIGHT - 2
+MENU_ROW = SCREEN_HEIGHT - 1
+WORK_ROWS = SCREEN_HEIGHT - 3  # righe 0..STATUS_ROW-1
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,7 +42,7 @@ class Cell:
 
 
 BLANK = Cell()
-SHADOW = Cell(SHADE_LIGHT, fg=0, bg=0)
+SHADOW = Cell(SHADE_LIGHT, fg=8, bg=0)
 
 
 class CellBuffer:

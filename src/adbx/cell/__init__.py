@@ -1,4 +1,4 @@
-"""Motore a celle: buffer, font, colori, mappa CP437."""
+"""Motore a celle: buffer, colori, mappa CP437."""
 
 from .attrs import (
     DEFAULT_BG,
@@ -11,28 +11,30 @@ from .attrs import (
 )
 from .buffer import (
     BLANK,
+    HELP_ROW,
+    MENU_ROW,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
     SHADOW,
+    STATUS_ROW,
     WORK_ROWS,
     Cell,
     CellBuffer,
 )
-from .font import GLYPH_H, GLYPH_W, BitmapFont
 
 __all__ = [
     "BLANK",
     "DEFAULT_BG",
     "DEFAULT_FG",
     "DOS_PALETTE",
-    "GLYPH_H",
-    "GLYPH_W",
+    "HELP_ROW",
+    "MENU_ROW",
     "NEWPORT_PALETTE",
     "SCREEN_HEIGHT",
     "SCREEN_WIDTH",
     "SHADOW",
+    "STATUS_ROW",
     "WORK_ROWS",
-    "BitmapFont",
     "Cell",
     "CellBuffer",
     "Color",

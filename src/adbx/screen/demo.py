@@ -1,14 +1,22 @@
 """Schermata dimostrativa della shell (provvisoria, fino a O1).
 
-Serve a verificare il motore a celle: chrome a tre righe, menu a due colonne,
+Serve a verificare il motore a celle: chrome in fondo, menu a due colonne,
 popup con ombra. In O1 diventera' il vero main menu.
 """
 
 from __future__ import annotations
 
 from ..cell.attrs import Color
-from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH, Cell, CellBuffer
-from ..cell.cp437 import SHADE_DARK
+from ..cell.buffer import (
+    HELP_ROW,
+    MENU_ROW,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    STATUS_ROW,
+    WORK_ROWS,
+    Cell,
+    CellBuffer,
+)
 from .scene import Scene, centered, popup
 
 WHITE = int(Color.WHITE)
@@ -17,7 +25,6 @@ BLUE = int(Color.BLUE)
 CYAN = int(Color.CYAN)
 GRAY = int(Color.GRAY)
 YELLOW = int(Color.YELLOW)
-RED = int(Color.RED)
 
 MENU = [
     "View/enter records",
@@ -66,6 +73,14 @@ def _write_label(buffer: CellBuffer, row: int, col: int, label: str, *,
     buffer.write(row, col + hot, label[hot], fg=fg, bg=bg, bold=not selected)
 
 
+def _menu_origin() -> tuple[int, int, int]:
+    """Riga iniziale e colonne delle due colonne di menu, centrate."""
+    rows = len(MENU) // 2
+    top = 2 + max(0, (WORK_ROWS - 2 - rows) // 2)
+    left = SCREEN_WIDTH // 2 - 24
+    return top, left, left + 26
+
+
 def build_demo_scene(*, selected: int = 0, show_popup: bool = True) -> Scene:
     scene = Scene(SCREEN_WIDTH, SCREEN_HEIGHT, Cell(fg=WHITE, bg=BLUE))
     base = CellBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, Cell(fg=WHITE, bg=BLUE))
@@ -74,29 +89,28 @@ def build_demo_scene(*, selected: int = 0, show_popup: bool = True) -> Scene:
     # Status box (righe 1-2)
     base.fill_rect(0, 0, 1, SCREEN_WIDTH, " ", fg=BLACK, bg=GRAY)
     base.write(0, 1, "Current database : C:\\ADBX\\DATA\\AVMOVIES", fg=BLACK, bg=GRAY)
-    base.write(0, 50, "Records in database   44", fg=BLACK, bg=GRAY)
+    base.write(0, SCREEN_WIDTH - 26, "Records in database   44", fg=BLACK, bg=GRAY)
     base.fill_rect(1, 0, 1, SCREEN_WIDTH, " ", fg=BLACK, bg=GRAY)
     base.write(1, 1, "Primary index : by Record Number", fg=BLACK, bg=GRAY)
-    base.write(1, 50, "Set : (none)", fg=BLACK, bg=GRAY)
+    base.write(1, SCREEN_WIDTH - 16, "Set : (none)", fg=BLACK, bg=GRAY)
 
-    # Menu a due colonne
-    columns = ((4, 4), (4, 36))
+    # Menu a due colonne, centrato nell'area di lavoro
+    top, left_col, right_col = _menu_origin()
     for index, label in enumerate(MENU):
-        row0, col0 = columns[index % 2]
-        row = row0 + index // 2
-        _write_label(base, row, col0, label, selected=index == selected)
+        row = top + index // 2
+        col = left_col if index % 2 == 0 else right_col
+        _write_label(base, row, col, label, selected=index == selected)
 
-    # Riga di stato (23), help (24), menu (25)
-    base.fill_rect(22, 0, 1, SCREEN_WIDTH, " ", fg=BLACK, bg=CYAN)
-    base.write(22, 1, "View", fg=BLACK, bg=CYAN)
-    base.write(22, 20, "Record : 1/44", fg=BLACK, bg=CYAN)
-    base.write(22, 60, "adbx 0.1.0", fg=BLACK, bg=CYAN)
+    base.fill_rect(STATUS_ROW, 0, 1, SCREEN_WIDTH, " ", fg=BLACK, bg=CYAN)
+    base.write(STATUS_ROW, 1, "View", fg=BLACK, bg=CYAN)
+    base.write(STATUS_ROW, 24, "Record : 1/44", fg=BLACK, bg=CYAN)
+    base.write(STATUS_ROW, SCREEN_WIDTH - 10, "adbx 0.1.0", fg=BLACK, bg=CYAN, bold=True)
 
-    base.fill_rect(23, 0, 1, SCREEN_WIDTH, " ", fg=YELLOW, bg=BLACK)
-    base.write(23, 1, HELP[MENU[selected]], fg=YELLOW, bg=BLACK)
+    base.fill_rect(HELP_ROW, 0, 1, SCREEN_WIDTH, " ", fg=YELLOW, bg=BLACK)
+    base.write(HELP_ROW, 1, HELP[MENU[selected]], fg=YELLOW, bg=BLACK)
 
-    base.fill_rect(24, 0, 1, SCREEN_WIDTH, " ", fg=BLACK, bg=GRAY)
-    base.write(24, 1, "F1 Help   F10 Continue   ALT-F10 MainMenu   ALT-F3 Scripts",
+    base.fill_rect(MENU_ROW, 0, 1, SCREEN_WIDTH, " ", fg=BLACK, bg=GRAY)
+    base.write(MENU_ROW, 1, "F1 Help   F10 Continue   ALT-F10 MainMenu   ALT-F3 Scripts",
                fg=BLACK, bg=GRAY)
 
     scene.add("base", base)
@@ -110,7 +124,7 @@ def build_demo_scene(*, selected: int = 0, show_popup: bool = True) -> Scene:
         box.write(6, 1, " " * 34, fg=BLACK, bg=CYAN)
         box.write(6, 2, "AVMOVIES", fg=BLACK, bg=CYAN)
         box.write(7, 1, "Enter name or select with arrows", fg=GRAY, bg=BLUE)
-        row, col = centered(SCREEN_WIDTH, SCREEN_HEIGHT, 38, 9, top=6)
+        row, col = centered(SCREEN_WIDTH, SCREEN_HEIGHT, box.width, box.height)
         scene.add("popup", box, row, col)
 
     return scene
@@ -120,4 +134,4 @@ def demo_buffer(*, selected: int = 0, show_popup: bool = True) -> CellBuffer:
     return build_demo_scene(selected=selected, show_popup=show_popup).composite()
 
 
-__all__ = ["MENU", "build_demo_scene", "demo_buffer", "SHADE_DARK"]
+__all__ = ["MENU", "build_demo_scene", "demo_buffer"]

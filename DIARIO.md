@@ -109,3 +109,50 @@ Formato:
   `69 passed`.
 - Problemi aperti: nessuno.
 - Prossimo passo: O1 — shell.
+
+---
+
+### 2026-11-23 — Ondata O0 — Griglia SVGA, font TrueType, fit-to-window
+- Stato: completata (sostituisce le scelte di font e dimensioni della voce O0
+  precedente; la storia resta per tracciabilità).
+- Branch/commit: `main`.
+- Obiettivo: l'interfaccia era troppo grande e sgranata su schermi moderni.
+  Passare a una griglia SVGA, a un font TrueType antialiasato e alla scalatura
+  automatica della finestra, sul modello della console DOS di Windows XP.
+- File toccati: `src/adbx/cell/buffer.py` (132×43, `STATUS_ROW`/`HELP_ROW`/
+  `MENU_ROW`), `src/adbx/render/{qt_renderer,fonts,glyphs}.py`,
+  `src/adbx/app.py`, `src/adbx/screen/demo.py`, `src/adbx/data/fonts/*.ttf`,
+  `src/adbx/data/LICENSE-font.txt`, `tools/capture_ui.py`, test aggiornati,
+  `docs/spec/00-motore-celle.md`, nuovo `docs/spec/01-scalabilita.md`,
+  `PLAN.md`, `README.md`, `pyproject.toml`.
+- Scelte:
+  - **Griglia 132×43**: 132 colonne è la larghezza dei modi testo SVGA
+    classici; 43 righe stanno comodamente in una finestra 16:9. Chrome
+    ancorato in fondo: status 41, help 42, menu 43; area di lavoro 40 righe.
+  - **Font TrueType incorporato**: DejaVu Sans Mono regular e bold
+    (licenza Bitstream Vera); fallback al monospace di sistema. Nessun font
+    di sistema obbligatorio.
+  - **Cella = metriche del font** (avanzamento × ascent+descent), mai glifi
+    stirati, come nella console XP. Il corpo è scelto automaticamente fra 7 e
+    72 px di dispositivo: è il più grande che fa entrare la griglia nella
+    finestra; ridimensionando la finestra l'interfaccia si riscala, `F11`
+    porta in full screen. I margini residui sono pochi e usano il colore di
+    fondo dell'interfaccia, non il nero.
+  - **Caratteri grafici disegnati geometricamente** (`render/glyphs.py`):
+    cornici singole e doppie, blocchi e retinature non vengono dal font, così
+    le linee sono continue a ogni corpo (DejaVu lascia un pixel di vuoto ai
+    bordi della cella).
+  - **Atlante per colore e grassetto**, costruito in pixel di dispositivo:
+    testo nitido anche su HiDPI, nessuna conversione per frame.
+  - Rimossi il font bitmap CP437 8×16, `cell/font.py`, `tools/build_font.py`
+    e `tests/test_font.py`: non sono più la verità estetica.
+- Test: `68 passed` (aggiornati dump golden, dimensioni, fit, continuità
+  delle linee, smoke 132×43); lint pulito.
+- Screenshot: `docs/render/01-main-menu.png` e `02-popup.png` (1452×903,
+  corpo 18 px, cella 11×21). `font-cp437.png` rimosso.
+- Problemi aperti:
+  - Su finestre molto larghe (16:9) restano margini orizzontali, perché la
+    griglia 132×43 ha un rapporto d'aspetto diverso: si potrebbe riempire
+    allargando le celle, ma i glifi verrebbero stirati. Decisione rimandata.
+  - La mappatura colori 0–255 → 16 resta provvisoria (palette `A4.PAL`).
+- Prossimo passo: O1 — shell.

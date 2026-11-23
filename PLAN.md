@@ -6,7 +6,7 @@ regole di campo, set, report, script e applicazioni.
 
 - Licenza: MIT
 - Piattaforme: Linux, Windows, macOS
-- Interfaccia: finestra con griglia di celle 80×25, font CP437 8×16
+- Interfaccia: finestra con griglia di celle 132×43, font TrueType (DejaVu Sans Mono)
 - Motore: SQLite
 - Lingua di sviluppo: Python 3.11+
 
@@ -78,7 +78,7 @@ Deviazioni consapevoli dalla documentazione:
 
 ```
 config/      A4.DFL equivalente (JSON), driver stampanti, palette
-cell/        buffer di celle, font CP437, renderer, scala, mouse mapping
+cell/        buffer di celle, colori, mapping CP437, renderer, mouse mapping
 screen/      scene, popup, dialog, menu line, status line, help line, keymap
 data/        SQLite, DDL, strato record, indici, range, liste, memo, lock logico
 expr/        valutatore di espressioni e funzioni (semantica Alpha Four)
@@ -96,8 +96,10 @@ docs/        generatore di documentazione (equivalente A4DOC)
 
 ### 3.2 Motore a celle
 
-- Griglia logica **80×25** fissa; font bitmap **CP437 8×16** incorporato
-  (256 glifi, nessuna dipendenza da font di sistema); scala intera 1×–4×.
+- Griglia logica **132×43** fissa; font **TrueType** incorporato (DejaVu Sans
+  Mono regular/bold, licenza Bitstream Vera); corpo scelto automaticamente per
+  riempire la finestra, senza mai stirare i glifi (vedi
+  `docs/spec/01-scalabilita.md`).
 - Cella = `(char, fg, bg, blink, bold)`. Attributi ereditabili.
 - Righe convenzionali: **23** status line, **24** help line, **25** menu line.
 - Canvas separato per la stampa: fino a **240 colonne** (report), righe per
@@ -278,7 +280,7 @@ adbx/
 
 ## 5. Invarianti di UI
 
-1. Schermo 80×25: riga 23 status, 24 help, 25 menu; area di lavoro 22 righe.
+1. Schermo 132×43: riga 41 status, 42 help, 43 menu; area di lavoro 40 righe.
 2. Ogni comando è raggiungibile in tre modi: highlight+`ENTER`, **hot key**
    (la maiuscola del nome: `W`, `L`, `R`, `V`, `E`, `B`, `M`, `C`, `D`, `O`,
    `S`, `P`), mouse. I nomi dei comandi sono quindi API della tastiera.
@@ -302,12 +304,13 @@ aggiornato, commit atomici. Checkpoint a fine O3, O6, O9, O12.
 
 ### O0 — Fondamenta
 - **Obiettivo:** repository, motore a celle, input, harness.
-- **Scope:** buffer di celle, font CP437, renderer `QPainter`, scala, mapping
-  mouse→cella, scene/popup, keymap con Alt/F/Ctrl, dump golden, packaging,
-  CI.
-- **Accettazione:** griglia 80×25 con 16 colori + blink; box e popup
-  disegnabili; ogni tasto della tabella comandi arriva al gestore;
-  `pytest` verde; dump golden stabile su tutte le piattaforme.
+- **Scope:** buffer di celle, font TrueType, renderer `QPainter` scalabile,
+  mapping mouse→cella, scene/popup, keymap con Alt/F/Ctrl, dump golden,
+  packaging, CI.
+- **Accettazione:** griglia 132×43 con 16 colori + blink; griglia scalata alla
+  finestra senza stirare i glifi; box e popup disegnabili; ogni tasto della
+  tabella comandi arriva al gestore; `pytest` verde; dump golden stabile su
+  tutte le piattaforme.
 
 ### O1 — Shell
 - **Obiettivo:** l'ambiente che si vede all'avvio.

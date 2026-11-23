@@ -6,30 +6,39 @@ tastiera e i dump golden. Tutto il resto del programma scrive in un
 
 ## 1. Griglia
 
-- Dimensioni logiche: **80×25** celle (`SCREEN_WIDTH`, `SCREEN_HEIGHT`).
-- Area di lavoro: righe **1–22** (`WORK_ROWS`).
-- Righe convenzionali: **23** status line, **24** help line, **25** menu line.
+- Dimensioni logiche: **132×43** celle (`SCREEN_WIDTH`, `SCREEN_HEIGHT`).
+- Area di lavoro: righe **1–40** (`WORK_ROWS`).
+- Righe convenzionali, ancorate in fondo: **41** status line (`STATUS_ROW`),
+  **42** help line (`HELP_ROW`), **43** menu line (`MENU_ROW`).
 - Ogni cella: `Cell(ch, fg, bg, blink, bold)` immutabile.
 - Il clipping è silenzioso, come sul video originale: scrivere fuori bordo non
   solleva errori e non disegna.
 - La griglia di stampa è un canvas separato, fino a **240 colonne** (report):
   non è lo schermo.
+- La griglia **non cambia** con la finestra: gli script indirizzano celle
+  assolute. La scalabilità si applica al corpo del font, non alla geometria
+  (vedi `01-scalabilita.md`).
 
 ## 2. Font
 
-- Tabella bitmap **CP437 8×16**, 256 glifi × 16 byte, MSB a sinistra,
-  in `src/adbx/data/cp437_8x16.bin` (4.096 byte).
+- Font **TrueType** incorporato: **DejaVu Sans Mono** regular e bold, in
+  `src/adbx/data/fonts/` (licenza Bitstream Vera, vedi
+  `src/adbx/data/LICENSE-font.txt`). Se il caricamento fallisce si ripiega
+  sul monospace di sistema (`Consolas`, `Menlo`, `Courier New`, …).
+- La cella deriva dalle metriche del font: larghezza = avanzamento del
+  carattere, altezza = `ascent + descent`, in pixel di dispositivo. Nessun
+  fattore di scala sui glifi: il testo non viene mai stirato.
+- Il corpo è scelto **automaticamente** per riempire la finestra, fra 7 e 72
+  pixel, con passi di un pixel di dispositivo.
 - I caratteri **grafici** (cornici singole e doppie, blocchi, retinature) sono
-  disegnati proceduralmente da `tools/build_font.py`, non presi dal font
-  tipografico: è l'unico modo per avere linee continue tra celle adiacenti.
-  Coordinate: verticale singola a `x=3`, orizzontale singola a `y=7`; doppia a
-  `x=2,4` e `y=6,8`.
-- I caratteri alfabetici derivano da **DejaVu Sans Mono** (licenza Bitstream
-  Vera, vedi `src/adbx/data/LICENSE-font.txt`).
-- Rigenerazione: `python tools/build_font.py` (richiede Pillow e un font
-  monospaziato installato). Il `.bin` è versionato: il programma non dipende
-  da font di sistema.
-- Il codice 0x00–0x1F di CP437 è reso come spazio.
+  disegnati geometricamente da `render/glyphs.py`, non presi dal font: è
+  l'unico modo per avere linee continue tra celle adiacenti a qualunque
+  corpo. Spessore delle linee: `altezza_cella / 16` pixel di dispositivo;
+  doppie a due linee distanziate di uno spessore.
+- Il grassetto usa il peso bold del font più il colore intenso (l'attributo
+  DOS `bold` era l'intensità).
+- Le retinature `░▒▓` sono rese come velo traslucido del colore di primo
+  piano (25%, 50%, 75%).
 
 ## 3. Colori
 
@@ -64,31 +73,38 @@ tastiera e i dump golden. Tutto il resto del programma scrive in un
 
 ## 6. Renderer
 
-- `CellRenderer` disegna un `CellBuffer` su `QPainter`, con scala intera
-  (default 2× → cella 16×32 px).
-- Atlante per colore: 256 glifi in un `QImage` ARGB, costruito in modo lazy e
-  memorizzato; nessuna conversione per frame.
-- `bold` usa il colore intenso; `blink` alterna la fase (timer a 500 ms).
+- `CellRenderer` disegna un `CellBuffer` su `QPainter`, in pixel di
+  dispositivo (`devicePixelRatio`), così il testo resta nitido su schermi HiDPI.
+- Atlante di 256 glifi **per colore e per grassetto**, costruito con
+  `QPainter` e antialiasing, memorizzato per corpo: nessuna conversione per
+  frame.
+- Il testo è centrato orizzontalmente nella cella; la linea di base è quella
+  del font.
+- `bold` usa il colore intenso e il peso bold; `blink` alterna la fase
+  (timer a 500 ms).
 - `to_image()` produce un `QImage` per screenshot e test.
+- `fit(width, height, cols, rows)` sceglie il corpo; `use_natural_size()` è
+  usata dagli screenshot canonici.
 
 ## 7. Dump golden
 
 Formato testuale stabile, usato per confrontare schermate senza immagini:
 
 ```
-adbx 80x25
-<80 caratteri della riga 1>
+adbx 132x43
+<132 caratteri della riga 1>
 <run-length degli attributi: "count@fg,bg,bold,blink" separati da spazio>
 ...
 ```
 
-Un dump uniforme di una riga è un solo token (`80@7,0,0,0`); le differenze
-sono leggibili in diff.
+Un dump uniforme di una riga è un solo token (`132@7,1,0,0`); le differenze
+sono leggibili in diff. Il dump non dipende dal font né dal ridimensionamento.
 
 ## 8. Accettazione O0
 
-- Griglia 80×25 con 16 colori, bold e blink.
-- Cornici continue tra celle adiacenti (verificato sui glifi).
+- Griglia 132×43 con 16 colori, bold e blink.
+- Font TrueType incorporato e corpo scelto per riempire la finestra.
+- Cornici continue tra celle adiacenti (verificato sulle giunzioni).
 - Popup con titolo e ombra, compositato su uno strato sottostante.
 - Ogni tasto della tabella comandi produce un `Key` canonico.
 - `pytest` verde; dump golden stabile; rendering PNG riproducibile.

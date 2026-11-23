@@ -1,81 +1,174 @@
-"""Renderer: disegna un `CellBuffer` con la tabella bitmap CP437."""
+"""Renderer Qt del motore a celle: font TrueType, atlante, simboli geometrici."""
 
 from __future__ import annotations
 
-from PyQt6.QtCore import QRect, Qt
-from PyQt6.QtGui import QColor, QImage, QPainter
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtGui import QColor, QFontMetricsF, QImage, QPainter
 
 from ..cell.attrs import DOS_PALETTE, bright, resolve_color
 from ..cell.buffer import CellBuffer
 from ..cell.cp437 import to_byte
-from ..cell.font import GLYPH_H, GLYPH_W, BitmapFont
+from .fonts import make_font, monospace_family
+from .glyphs import draw_geometric, is_geometric
+
+MAX_PIXEL_SIZE = 72
+MIN_PIXEL_SIZE = 7
 
 
 class CellRenderer:
-    """Disegna celle su un `QPainter`; nessuna conoscenza di form o report."""
+    """Disegna un `CellBuffer` su un `QPainter`; non conosce form o report."""
 
-    def __init__(self, font: BitmapFont | None = None,
-                 palette: tuple[tuple[int, int, int], ...] = DOS_PALETTE,
-                 scale: int = 2) -> None:
-        self.font = font or BitmapFont.load_default()
+    def __init__(self, *, pixel_size: int = 16, family: str | None = None,
+                 palette: tuple[tuple[int, int, int], ...] = DOS_PALETTE) -> None:
+        self.family = family or monospace_family()
         self.palette = palette
-        self.scale = max(1, int(scale))
-        self.cell_w = GLYPH_W * self.scale
-        self.cell_h = GLYPH_H * self.scale
-        self._atlases: dict[int, QImage] = {}
+        self.dpr = 1.0
+        self._pixel_size_dev = 0
+        self._atlases: dict[tuple[int, bool], QImage] = {}
+        self._prepare(max(MIN_PIXEL_SIZE, int(pixel_size)))
+        self.cell_w = float(self.advance)
+        self.cell_h = float(self.line_height)
 
-    # -- risorse ---------------------------------------------------------
-    def atlas(self, color: int) -> QImage:
-        color = resolve_color(color)
-        cached = self._atlases.get(color)
-        if cached is not None:
-            return cached
-        image = QImage(GLYPH_W * 256, GLYPH_H, QImage.Format.Format_ARGB32)
-        image.fill(Qt.GlobalColor.transparent)
-        rgb = QColor(*self.palette[color])
-        for byte in range(256):
-            rows = self.font.rows(byte)
-            for y, bits in enumerate(rows):
-                if not bits:
-                    continue
-                base = byte * GLYPH_W
-                for x in range(GLYPH_W):
-                    if bits & (1 << (GLYPH_W - 1 - x)):
-                        image.setPixelColor(base + x, y, rgb)
-        self._atlases[color] = image
-        return image
+    # -- metriche --------------------------------------------------------
+    def _prepare(self, pixel_size_dev: int) -> None:
+        """Costruisce font e metriche per un corpo in pixel di dispositivo."""
+        pixel_size_dev = max(MIN_PIXEL_SIZE, int(pixel_size_dev))
+        if pixel_size_dev == self._pixel_size_dev:
+            return
+        self._pixel_size_dev = pixel_size_dev
+        self._atlases.clear()
+        self._font = make_font(pixel_size_dev, family=self.family)
+        self._bold_font = make_font(pixel_size_dev, bold=True, family=self.family)
+        metrics = QFontMetricsF(self._font)
+        self.advance = max(1, round(metrics.horizontalAdvance("M")))
+        self.ascent = max(1, round(metrics.ascent()))
+        self.descent = max(0, round(metrics.descent()))
+        self.line_height = max(1, self.ascent + self.descent)
+
+    @property
+    def pixel_size(self) -> int:
+        return self._pixel_size_dev
+
+    def _fits(self, width: float, height: float, cols: int, rows: int) -> bool:
+        return (self.advance * cols <= width * self.dpr
+                and self.line_height * rows <= height * self.dpr)
+
+    def fit(self, width: float, height: float, cols: int, rows: int,
+            dpr: float = 1.0) -> None:
+        """Sceglie il corpo più grande che fa stare la griglia nella finestra.
+
+        Le celle derivano dalle metriche del font, non da un fattore di scala:
+        il testo non viene mai stirato.
+        """
+        self.dpr = max(0.5, float(dpr))
+        width = max(1.0, width)
+        height = max(1.0, height)
+        best = MIN_PIXEL_SIZE
+        for candidate in range(MIN_PIXEL_SIZE, MAX_PIXEL_SIZE + 1):
+            self._prepare(candidate)
+            if self._fits(width, height, cols, rows):
+                best = candidate
+            elif candidate > MIN_PIXEL_SIZE:
+                break
+        self._prepare(best)
+        self.cell_w = self.advance / self.dpr
+        self.cell_h = self.line_height / self.dpr
+
+    def use_natural_size(self, pixel_size: int, dpr: float = 1.0) -> None:
+        """Cella = metriche del font: usata per screenshot canonici."""
+        self.dpr = max(0.5, float(dpr))
+        self._prepare(pixel_size)
+        self.cell_w = self.advance / self.dpr
+        self.cell_h = self.line_height / self.dpr
+
+    def grid_size(self, cols: int, rows: int) -> tuple[float, float]:
+        return self.cell_w * cols, self.cell_h * rows
 
     def size(self, buffer: CellBuffer) -> tuple[int, int]:
-        return buffer.width * self.cell_w, buffer.height * self.cell_h
+        return round(self.cell_w * buffer.width), round(self.cell_h * buffer.height)
+
+    # -- risorse ---------------------------------------------------------
+    def atlas(self, color: int, bold: bool = False) -> QImage:
+        key = (resolve_color(color), bold)
+        cached = self._atlases.get(key)
+        if cached is not None:
+            return cached
+        image = QImage(self.advance * 256, self.line_height, QImage.Format.Format_ARGB32)
+        image.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(image)
+        try:
+            painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            painter.setFont(self._bold_font if bold else self._font)
+            painter.setPen(QColor(*self.palette[key[0]]))
+            for byte, char in enumerate(_ATLAS_CHARS):
+                if char == " " or is_geometric(char):
+                    continue
+                painter.drawText(QPointF(byte * self.advance, self.ascent), char)
+        finally:
+            painter.end()
+        self._atlases[key] = image
+        return image
 
     # -- disegno ---------------------------------------------------------
     def paint(self, painter: QPainter, buffer: CellBuffer, *,
               blink_on: bool = True, row_offset: int = 0, col_offset: int = 0) -> None:
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
+        dpr = self.dpr
         cell_w, cell_h = self.cell_w, self.cell_h
-        glyph_src = QRect(0, 0, GLYPH_W, GLYPH_H)
+        advance, line = self.advance, self.line_height
+        glyph_w = advance / dpr
         for row in range(buffer.height):
-            y = (row + row_offset) * cell_h
+            top = (row + row_offset) * cell_h
             for col in range(buffer.width):
                 cell = buffer.get(row, col)
-                x = (col + col_offset) * cell_w
-                painter.fillRect(x, y, cell_w, cell_h,
-                                 QColor(*self.palette[resolve_color(cell.bg)]))
+                left = (col + col_offset) * cell_w
+                bg = resolve_color(cell.bg)
+                painter.fillRect(QRectF(left, top, cell_w, cell_h),
+                                 QColor(*self.palette[bg]))
                 if cell.ch == " " or (cell.blink and not blink_on):
                     continue
                 fg = bright(cell.fg) if cell.bold else resolve_color(cell.fg)
-                glyph_src.moveLeft(to_byte(cell.ch) * GLYPH_W)
+                if is_geometric(cell.ch):
+                    draw_geometric(painter, cell.ch, QRectF(left, top, cell_w, cell_h),
+                                   QColor(*self.palette[fg]), dpr)
+                    continue
+                image = self.atlas(fg, cell.bold)
+                x = round((left + (cell_w - glyph_w) / 2) * dpr)
+                source = QRectF(to_byte(cell.ch) * advance, 0, advance, line)
                 painter.drawImage(
-                    QRect(x, y, cell_w, cell_h), self.atlas(fg), glyph_src
+                    QRectF(x / dpr, top, glyph_w, cell_h), image, source
                 )
 
     def to_image(self, buffer: CellBuffer, *, blink_on: bool = True) -> QImage:
-        width, height = self.size(buffer)
-        image = QImage(width, height, QImage.Format.Format_RGB32)
+        width = round(self.cell_w * buffer.width * self.dpr)
+        height = round(self.cell_h * buffer.height * self.dpr)
+        image = QImage(max(1, width), max(1, height), QImage.Format.Format_RGB32)
         image.fill(Qt.GlobalColor.black)
         painter = QPainter(image)
         try:
+            painter.scale(self.dpr, self.dpr)
             self.paint(painter, buffer, blink_on=blink_on)
         finally:
             painter.end()
         return image
+
+
+def _atlas_chars() -> tuple[str, ...]:
+    from ..cell.cp437 import CHARS
+
+    return CHARS
+
+
+_ATLAS_CHARS = _atlas_chars()
+
+
+def best_pixel_size(width: float, height: float, cols: int, rows: int,
+                    family: str | None = None) -> int:
+    """Corpo massimo che fa entrare la griglia, senza costruire il renderer."""
+    probe = CellRenderer(pixel_size=MIN_PIXEL_SIZE, family=family)
+    probe.fit(width, height, cols, rows, dpr=1.0)
+    return probe.pixel_size
+
+
+__all__ = ["CellRenderer", "MAX_PIXEL_SIZE", "MIN_PIXEL_SIZE", "best_pixel_size"]

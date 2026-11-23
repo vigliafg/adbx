@@ -1,7 +1,7 @@
 """Mappa CP437: byte <-> carattere Unicode e glifi grafici.
 
 Python fornisce il codec `cp437`; qui lo si espone come tabella indicizzata per
-byte, che e' l'indice della tabella bitmap del font.
+byte, che e' l'indice usato dal renderer per l'atlante dei glifi.
 
 I codici 0x00-0x1F in CP437 sono simboli grafici (faccine, semi, frecce), ma il
 codec Python li mappa sui caratteri di controllo: adottiamo lo spazio, come fa

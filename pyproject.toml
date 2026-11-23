@@ -29,7 +29,7 @@ where = ["src"]
 include = ["adbx*"]
 
 [tool.setuptools.package-data]
-adbx = ["data/*.bin", "data/*.txt"]
+adbx = ["data/*.txt", "data/fonts/*.ttf"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

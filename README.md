@@ -5,7 +5,7 @@ un database relazionale senza programmazione, con regole di campo, set,
 report, script e applicazioni.
 
 adbx non emula il DOS: replica **il comportamento** di Alpha Four dentro una
-finestra con una griglia di caratteri 80×25 (font CP437), su un motore SQLite,
+finestra con una griglia di caratteri scalabile (132×43, font TrueType), su un motore SQLite,
 su Linux, Windows e macOS.
 
 - Licenza: MIT
