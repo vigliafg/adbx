@@ -9,7 +9,7 @@ finestra con una griglia di caratteri scalabile (132×43, font TrueType), su un 
 su Linux, Windows e macOS.
 
 - Licenza: MIT
-- Stato: **O11 completata** — applicazioni, menu, banner, macro e protezioni
+- Stato: **O12 completata** — configurazione, stampa, colori e documentazione
 - Piano completo: [`PLAN.md`](PLAN.md)
 - Diario di implementazione: [`DIARIO.md`](DIARIO.md)
 - Inventario funzionale estratto dai manuali:
@@ -29,6 +29,7 @@ su Linux, Windows e macOS.
   utility e I/O [`docs/spec/11-utility-io.md`](docs/spec/11-utility-io.md),
   script [`docs/spec/12-script.md`](docs/spec/12-script.md),
   applicazioni [`docs/spec/13-applications.md`](docs/spec/13-applications.md),
+  configurazione e stampa [`docs/spec/14-config-stampa.md`](docs/spec/14-config-stampa.md),
   ambiente DOS di riferimento
   [`docs/spec/03-ambiente-dos-riferimento.md`](docs/spec/03-ambiente-dos-riferimento.md)
 - Schermate: [`docs/render/`](docs/render/)
@@ -167,6 +168,19 @@ banner appare all'avvio. `Prevent/allow file alterations` blocca form,
 report, etichette, lettere, range, search/sort e regole di campo finché non
 vengono riabilitati. La riga di comando `--app NOME` avvia direttamente
 un'applicazione.
+
+Con **O12** arriva la configurazione. `config.json` conserva default settings,
+ultimo database, path e stampante; `Other → Default settings` gestisce
+separatore e formato data (americano/europeo), auto flush, pattern matching,
+prevent change/enter, single step enters, lock delle utility e compatibilità
+dBASE IV. `Other → Printer configuration` installa fino a 26 driver A–Z scelti
+da un catalogo di 26 modelli, con codici decimali di setup, close-out, bold,
+italic, underline e compressed, righe per pagina, avanzamento `Formfeed`,
+`Sheetfeeder` o `Linefeed`, margini e porta; i PDF rispettano margini e font
+del driver attivo e il flusso testuale applica i codici e l'avanzamento.
+`Other → Set screen colors` salva i 18 token del tema per database o set.
+`Other → Documentation` genera report di struttura database/set, field rules,
+applicazioni e script in anteprima e PDF.
 
 ## Riferimenti
 

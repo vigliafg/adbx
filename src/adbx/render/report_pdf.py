@@ -20,7 +20,8 @@ def _escape(text: str) -> str:
 
 def write_report_pdf(output: ReportOutput, path: str | Path,
                      title: str = "Report", *, font_size: float | None = None,
-                     landscape: bool | None = None) -> Path:
+                     landscape: bool | None = None,
+                     driver=None) -> Path:
     target = Path(path)
     width = 792 if landscape is None and output.width > 100 else 612
     height = 612 if width == 792 else 792
@@ -33,6 +34,23 @@ def write_report_pdf(output: ReportOutput, path: str | Path,
     if font_size is None:
         font_size = max(4.0, min(10.0, usable / max(1, output.width) / 0.6))
     leading = font_size * 1.25
+    if driver is None:
+        try:
+            from ..config.printers import current_printer
+            driver = current_printer()
+        except ImportError:  # pragma: no cover
+            driver = None
+    left_margin = margin
+    top_margin = margin
+    if driver is not None:
+        left_margin = max(6.0, min(width / 3,
+                                   driver.margin_left * font_size * 0.6 + 6.0))
+        max(6.0, min(width / 3,
+                                    driver.margin_right * font_size * 0.6 + 6.0))
+        top_margin = max(6.0, min(height / 3,
+                                  driver.margin_top * leading + 6.0))
+        max(6.0, min(height / 3,
+                                     driver.margin_bottom * leading + 6.0))
 
     objects: list[bytes] = []
 
@@ -47,7 +65,8 @@ def write_report_pdf(output: ReportOutput, path: str | Path,
     content_ids: list[int] = []
     for page in output.pages:
         commands = ["BT", f"/F1 {font_size:.2f} Tf", f"{leading:.2f} TL",
-                    f"1 0 0 1 {margin:.2f} {height - margin:.2f} Tm"]
+                    f"1 0 0 1 {left_margin:.2f} "
+                    f"{height - top_margin:.2f} Tm"]
         for line in page.lines:
             commands.append(f"({_escape(line)}) Tj")
             commands.append("T*")

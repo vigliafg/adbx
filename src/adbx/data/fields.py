@@ -134,6 +134,16 @@ def record_length(fields: list[Field] | tuple[Field, ...]) -> int:
 
 # -- valori ---------------------------------------------------------------
 
+DATE_SEPARATOR = "/"
+DATE_EUROPEAN = False
+
+
+def configure_dates(separator: str = "/", european: bool = False) -> None:
+    """Imposta separatore e ordine delle date per input e output."""
+    global DATE_SEPARATOR, DATE_EUROPEAN
+    DATE_SEPARATOR = (separator or "/")[:1]
+    DATE_EUROPEAN = bool(european)
+
 
 def blank_value(field: Field) -> str:
     return ""
@@ -162,7 +172,7 @@ def parse_value(field: Field, text: str) -> str:
 def format_value(field: Field, value: str) -> str:
     """Valore canonico → testo da mostrare nel form."""
     if field.type == "D":
-        return date_display(value)
+        return date_display(value, DATE_SEPARATOR)
     if field.type == "L":
         return ".T." if value == "1" else ".F." if value == "0" else ""
     return value or ""
@@ -245,7 +255,11 @@ def _parse_date(text: str) -> str:
         return ""
     match = re.match(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$", text)
     if match:
-        month, day, year = (int(part) for part in match.groups())
+        first, second, year = (int(part) for part in match.groups())
+        if DATE_EUROPEAN:
+            day, month = first, second
+        else:
+            month, day = first, second
         if year < 100:
             year += 1900
     else:
@@ -258,11 +272,14 @@ def _parse_date(text: str) -> str:
     return f"{year:04d}{month:02d}{day:02d}"
 
 
-def date_display(value: str, separator: str = "/") -> str:
+def date_display(value: str, separator: str | None = None) -> str:
     if not value or len(value) != 8 or not value.isdigit():
         return ""
     year, month, day = value[:4], value[4:6], value[6:8]
-    return f"{month}{separator}{day}{separator}{year}"
+    sep = DATE_SEPARATOR if separator is None else separator
+    if DATE_EUROPEAN:
+        return f"{day}{sep}{month}{sep}{year}"
+    return f"{month}{sep}{day}{sep}{year}"
 
 
 def _parse_logical(text: str) -> str:

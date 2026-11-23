@@ -762,12 +762,45 @@ Formato:
 
 ---
 
-## RIPRESA — checkpoint O11
+### 2026-11-23 — Ondata O12 — Configurazione e stampa
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: `config.json`, default settings, 26 driver di stampa, codici,
+  page advance, colori per database, documentazione.
+- File toccati: nuovi `src/adbx/config/` (defaults, printers, colors),
+  `src/adbx/docs/generator.py`, `src/adbx/shell/settings.py`, specifica
+  `docs/spec/14-config-stampa.md`, screenshot `51`–`56`; aggiornati
+  `controller.py` (menu Other, sessioni, applicazione config, temi, prevent),
+  `fields.py` (date configurabili), `report_pdf.py` (margini driver),
+  `README.md`, `tools/capture_ui.py`; test nuovi `test_config`,
+  `test_config_ui`.
+- Scelte:
+  - **`config.json`** unico, atomico, con defaults e driver.
+  - **Date** configurabili a runtime (separatore e ordine).
+  - **Catalogo di 26 modelli** e 26 lettere; codici decimali e tre modalità
+    di avanzamento; margini applicati al PDF.
+  - **Colori** per owner con 18 token, ricostruiti all'apertura.
+  - **Documentazione** come ReportOutput e PDF, per database, set, regole,
+    applicazioni e script.
+- Test: **444 passed**; `uvx ruff check src tests tools` pulito;
+  `./start.sh --smoke` e `--version` verdi.
+- Screenshot: `51-other-menu`, `52-default-settings`, `53-printer-config`,
+  `54-printer-driver`, `55-screen-colors`, `56-documentation`.
+- Problemi aperti / deviazioni dichiarate:
+  - I driver non scrivono su porte DOS; alimentano PDF e stream testuali.
+  - Auto flush è già il comportamento; lock/dBASE IV/monocromatico senza
+    effetti single-user.
+  - Palette a 16 colori, non 64.000.
+  - Il documentation program è integrato, non un `A4DOC` separato.
+- Prossimo passo: O13 — Conformità 1.0.
 
-- Ultimo commit: O11 (applicazioni).
-- Test: 425 verdi; ruff pulito; smoke e version verdi.
-- Specifiche: `docs/spec/13-applications.md`; screenshot `45`–`50`.
-- Prossimo obiettivo: O12 — configurazione, 26 driver di stampa, codici,
-  page advance, colori per database, default settings, documentation
-  generator.
+---
+
+## RIPRESA — checkpoint O12
+
+- Ultimo commit: O12 (configurazione e stampa).
+- Test: 444 verdi; ruff pulito; smoke e version verdi.
+- Specifiche: `docs/spec/14-config-stampa.md`; screenshot `51`–`56`.
+- Prossimo obiettivo: O13 — conformità 1.0: suite delle 25 lezioni in CI,
+  messaggi armonizzati, prestazioni, packaging, documentazione utente.
 

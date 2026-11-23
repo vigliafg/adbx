@@ -28,6 +28,8 @@ from adbx.app.model import (  # noqa: E402
 )
 from adbx.app.runtime import ApplicationRuntime  # noqa: E402
 from adbx.app.store import ApplicationStore  # noqa: E402
+from adbx.config.defaults import ConfigStore  # noqa: E402
+from adbx.config.printers import driver_from_catalog  # noqa: E402
 from adbx.data import indexing  # noqa: E402
 from adbx.data.expressions import SearchRow  # noqa: E402
 from adbx.data.fields import Field  # noqa: E402
@@ -74,7 +76,11 @@ from adbx.shell.applications import (  # noqa: E402
     BannerPainter,
     ProtectionSession,
 )
-from adbx.shell.controller import APPLICATION_ITEMS, SCRIPTS_ITEMS  # noqa: E402
+from adbx.shell.controller import (  # noqa: E402
+    APPLICATION_ITEMS,
+    OTHER_ITEMS,
+    SCRIPTS_ITEMS,
+)
 from adbx.shell.designer import DesignerSession  # noqa: E402
 from adbx.shell.forms import FormDesigner  # noqa: E402
 from adbx.shell.global_update import GlobalSession  # noqa: E402
@@ -97,6 +103,12 @@ from adbx.shell.scripts import (  # noqa: E402
 )
 from adbx.shell.searching import SearchSession  # noqa: E402
 from adbx.shell.sets import SetDesigner, SetSession  # noqa: E402
+from adbx.shell.settings import (  # noqa: E402
+    ColorSession,
+    DefaultsSession,
+    DocumentationSession,
+    PrinterSession,
+)
 from adbx.shell.state import demo_state  # noqa: E402
 from adbx.shell.transfer import TransferSession  # noqa: E402
 from adbx.shell.utilities import UtilitySession  # noqa: E402
@@ -565,6 +577,26 @@ def main(argv: list[str] | None = None) -> int:
         app_session.start()
         banner_painter = BannerPainter(demo_app)
         protection = ProtectionSession(workspace, "AVMOVIES")
+        other_menu = screens.submenu_overlay(
+            menu, list(OTHER_ITEMS), 0, title="Other")
+        config = ConfigStore(Path(temporary))
+        config.printers.install(driver_from_catalog("A", 1))
+        config.printers.install(driver_from_catalog("B", 18))
+        config.printers.select("A")
+        defaults_session = DefaultsSession(config.defaults)
+        printer_list = PrinterSession(config.printers)
+        printer_edit = PrinterSession(config.printers)
+        printer_edit.stage = "edit"
+        printer_edit.driver = config.printers.drivers["B"]
+        printer_edit.field_index = 2
+        printer_edit._load()
+        color_session = ColorSession(workspace, "AVMOVIES")
+        doc_session = DocumentationSession(
+            workspace, script_store, app_store, Path(temporary))
+        doc_session.type_index = 0
+        doc_session.target = "AVMOVIES"
+        doc_session.stage = "options"
+        doc_session._generate()
 
         shots = {
             "01-main-menu": menu,
@@ -616,6 +648,12 @@ def main(argv: list[str] | None = None) -> int:
             "48-app-runtime": app_session.view(),
             "49-app-banner": banner_painter.view(),
             "50-file-protection": protection.view(),
+            "51-other-menu": other_menu,
+            "52-default-settings": defaults_session.view(),
+            "53-printer-config": printer_list.view(),
+            "54-printer-driver": printer_edit.view(),
+            "55-screen-colors": color_session.view(),
+            "56-documentation": doc_session.view(),
         }
         for name, view in shots.items():
             image = renderer.to_image(view.buffer)

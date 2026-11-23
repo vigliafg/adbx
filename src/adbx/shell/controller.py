@@ -16,9 +16,13 @@ from ..app.protection import is_protected
 from ..app.runtime import ApplicationRuntime
 from ..app.store import ApplicationStore
 from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ROW
+from ..config.colors import theme_for
+from ..config.defaults import ConfigStore
+from ..config.printers import configure_printer
 from ..data import indexing
 from ..data import rules as field_rules
 from ..data.expressions import Context
+from ..data.fields import configure_dates
 from ..data.indexing import RECORD_NUMBER, SEARCH_PREFIX
 from ..data.labels_engine import render_labels
 from ..data.letters import render_letters
@@ -70,6 +74,12 @@ from .scripts import (
 )
 from .searching import SearchSession
 from .sets import SetDesigner, SetSession
+from .settings import (
+    ColorSession,
+    DefaultsSession,
+    DocumentationSession,
+    PrinterSession,
+)
 from .state import ShellState, default_root, demo_state
 from .theme import NEWPORT, Theme
 from .transfer import TransferSession
@@ -208,6 +218,10 @@ SEARCH_ITEMS: tuple[tuple[str, str], ...] = (
 
 OTHER_ITEMS: tuple[tuple[str, str], ...] = (
     ("Pattern matching", "pattern"),
+    ("Default settings", "defaults"),
+    ("Printer configuration", "printer"),
+    ("Set screen colors", "colors"),
+    ("Documentation", "documentation"),
 )
 
 GLOBAL_ITEMS: tuple[tuple[str, str], ...] = (
@@ -286,8 +300,13 @@ class ShellController:
                  open_path: str | Path | None = None,
                  application: str | None = None,
                  theme: Theme = NEWPORT) -> None:
+        config_root = (Path(root).expanduser() if root else
+                       (Path(open_path).expanduser().parent
+                        if open_path is not None else default_root()))
+        self.config_file = ConfigStore(config_root)
         self.state = ShellState(Path(root).expanduser() if root else default_root())
         self.theme = theme
+        self._apply_config()
         self.menu_index = 0
         self.cursor = 0
         self.first = 0
@@ -332,6 +351,10 @@ class ShellController:
         self.banner_painter: BannerPainter | None = None
         self.macro_editor: MacroEditor | None = None
         self.protection_session: ProtectionSession | None = None
+        self.defaults_session: DefaultsSession | None = None
+        self.printer_session: PrinterSession | None = None
+        self.color_session: ColorSession | None = None
+        self.documentation_session: DocumentationSession | None = None
         self.application_return_base = "menu"
         self.editing_application_macro: AppItem | None = None
         self.pending_app_password = False
@@ -431,6 +454,14 @@ class ShellController:
             base = self.macro_editor.view()
         elif self.base == "protection" and self.protection_session is not None:
             base = self.protection_session.view()
+        elif self.base == "defaults" and self.defaults_session is not None:
+            base = self.defaults_session.view()
+        elif self.base == "printers" and self.printer_session is not None:
+            base = self.printer_session.view()
+        elif self.base == "colors" and self.color_session is not None:
+            base = self.color_session.view()
+        elif self.base == "documentation" and self.documentation_session is not None:
+            base = self.documentation_session.view()
         elif self.base == "directory":
             base = screens.directory(
                 self.state, self.cursor, self.input_text, self.input_cursor,
@@ -609,6 +640,14 @@ class ShellController:
             self._handle_macro_editor(key)
         elif self.base == "protection":
             self._handle_protection(key)
+        elif self.base == "defaults":
+            self._handle_defaults(key)
+        elif self.base == "printers":
+            self._handle_printers(key)
+        elif self.base == "colors":
+            self._handle_colors(key)
+        elif self.base == "documentation":
+            self._handle_documentation(key)
         elif self.base == "directory":
             self._handle_directory(key)
         elif self.base == "structure":
@@ -886,6 +925,9 @@ class ShellController:
             return None
         self.workspace = workspace
         self.database = database
+        self._apply_owner_theme(database.name)
+        if self.config_file is not None:
+            workspace.pattern_mode = self.config_file.defaults.pattern
         self.state.database = database
         return database
 
@@ -1029,6 +1071,14 @@ class ShellController:
         if self.database is None:
             self._notice("Select a database or set first.")
             return
+        if self.config_file is not None:
+            defaults = self.config_file.defaults
+            if mode == "enter" and defaults.prevent_enter:
+                self._notice("Entering records is prevented by Default settings.")
+                return
+            if mode == "change" and defaults.prevent_change:
+                self._notice("Changing records is prevented by Default settings.")
+                return
         if self.database.locked:
             self._prompt_unlock(self.database)
             return
@@ -1125,6 +1175,9 @@ class ShellController:
     def _adopt_database(self, database: Database, *, path: Path | None = None) -> None:
         self.workspace = database.workspace
         self.database = database
+        self._apply_owner_theme(database.name)
+        if self.config_file is not None and self.workspace is not None:
+            self.workspace.pattern_mode = self.config_file.defaults.pattern
         self.state.database = database
         target = path or database.source
         try:
@@ -1418,6 +1471,22 @@ class ShellController:
                 self.cursor = self.first = self._first_file_index()
                 self._sync_input()
             self._notice(f"Database {name} erased.")
+
+    # -- configurazione -------------------------------------------------
+    def _apply_config(self) -> None:
+        if self.config_file is None:
+            return
+        defaults = self.config_file.defaults
+        configure_dates(defaults.date_separator, defaults.european_dates)
+        configure_printer(self.config_file.printers.active)
+        if getattr(self, "workspace", None) is not None:
+            self.workspace.pattern_mode = defaults.pattern
+
+    def _apply_owner_theme(self, owner: str) -> None:
+        workspace = self._workspace()
+        if workspace is None or not owner:
+            return
+        self.theme = theme_for(workspace, owner, NEWPORT)
 
     # -- script ----------------------------------------------------------
     def _script_store(self) -> ScriptStore:
@@ -2173,6 +2242,74 @@ class ShellController:
             self.editing_application_macro = None
             self.base = "appeditor"
 
+
+    def _handle_defaults(self, key: Key) -> None:
+        session = self.defaults_session
+        assert session is not None
+        if key.name == "F1":
+            self._open_help(session.help_topic)
+            return
+        session.handle(key)
+        if session.saved and self.config_file is not None:
+            self.config_file.defaults = session.defaults
+            try:
+                self.config_file.save()
+            except Exception as exc:
+                self._notice(str(exc))
+                return
+            self._apply_config()
+            self._notice("Default settings saved.")
+        if session.close:
+            self.defaults_session = None
+            self.base = "menu"
+
+    def _handle_printers(self, key: Key) -> None:
+        session = self.printer_session
+        assert session is not None
+        if key.name == "F1":
+            self._open_help(session.help_topic)
+            return
+        session.handle(key)
+        if session.saved and self.config_file is not None:
+            self.config_file.printers = session.config
+            try:
+                self.config_file.save()
+            except Exception as exc:
+                self._notice(str(exc))
+                return
+            configure_printer(session.config.active)
+            self._notice("Printer configuration saved.")
+        if session.close:
+            self.printer_session = None
+            self.base = "menu"
+
+    def _handle_colors(self, key: Key) -> None:
+        session = self.color_session
+        assert session is not None
+        if key.name == "F1":
+            self._open_help(session.help_topic)
+            return
+        session.handle(key)
+        if session.saved:
+            self._apply_owner_theme(session.owner)
+            self._notice(f"Colors for {session.owner} saved.")
+        if session.close:
+            self.color_session = None
+            self.base = "menu"
+
+    def _handle_documentation(self, key: Key) -> None:
+        session = self.documentation_session
+        assert session is not None
+        if key.name == "F1":
+            self._open_help(session.help_topic)
+            return
+        session.handle(key)
+        if session.close:
+            if session.pdf_path is not None:
+                self._notice(session.status)
+            self.documentation_session = None
+            self.base = "menu"
+
     def _handle_protection(self, key: Key) -> None:
         session = self.protection_session
         assert session is not None
@@ -2823,6 +2960,7 @@ class ShellController:
             return False
         self.active_set = definition
         self.database = primary
+        self._apply_owner_theme(definition.name)
         self.state.database = primary
         self.state.set_name = definition.name
         self.state.current = None
@@ -3410,6 +3548,42 @@ class ShellController:
 
     def _other_action(self, action: str) -> None:
         self.overlay = None
+        if action == "defaults":
+            if self.config_file is None:
+                self._notice("Configuration is not available.")
+                return
+            self.defaults_session = DefaultsSession(
+                self.config_file.defaults, self.theme)
+            self.base = "defaults"
+            return
+        if action == "printer":
+            if self.config_file is None:
+                self._notice("Configuration is not available.")
+                return
+            self.printer_session = PrinterSession(
+                self.config_file.printers, self.theme)
+            self.base = "printers"
+            return
+        if action == "colors":
+            workspace = self._workspace()
+            owner = self._form_owner()
+            if workspace is None or not owner:
+                self._notice("Open a database or set first.")
+                return
+            self.color_session = ColorSession(workspace, owner,
+                                              NEWPORT, self.theme)
+            self.base = "colors"
+            return
+        if action == "documentation":
+            workspace = self._workspace()
+            if workspace is None:
+                self._notice("Open a database or set first.")
+                return
+            self.documentation_session = DocumentationSession(
+                workspace, self._script_store(), self._application_store(),
+                workspace.directory, self.theme)
+            self.base = "documentation"
+            return
         if action == "pattern":
             workspace = (self.database.workspace if self.database is not None
                          else self.workspace)
@@ -3420,6 +3594,9 @@ class ShellController:
             current = workspace.pattern_mode
             value = modes[(modes.index(current) + 1) % len(modes)]
             workspace.pattern_mode = value
+            if self.config_file is not None:
+                self.config_file.defaults.pattern = value
+                self.config_file.save()
             label = {"exact": "Exact", "case": "Case",
                      "insensitive": "Case-insensitive"}[value]
             self._notice(f"Pattern matching: {label}.")
