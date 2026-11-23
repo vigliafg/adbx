@@ -20,6 +20,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="cartella dati da mostrare all'avvio")
     parser.add_argument("--open", metavar="FILE",
                         help="database o set da aprire all'avvio")
+    parser.add_argument("--app", metavar="NAME",
+                        help="applicazione da avviare")
     args = parser.parse_args(argv)
 
     if args.smoke:
@@ -39,7 +41,8 @@ def main(argv: list[str] | None = None) -> int:
     except ImportError as exc:  # pragma: no cover
         print(f"PyQt6 non disponibile: {exc}", file=sys.stderr)
         return 2
-    return run([sys.argv[0]], data=args.data, open_path=args.open)
+    return run([sys.argv[0]], data=args.data, open_path=args.open,
+               application=args.app)
 
 
 if __name__ == "__main__":

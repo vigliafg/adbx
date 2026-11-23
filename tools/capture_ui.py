@@ -20,6 +20,14 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from PyQt6.QtGui import QGuiApplication  # noqa: E402
 
+from adbx.app.model import (  # noqa: E402
+    AppItem,
+    Application,
+    AppMenu,
+    BannerScreen,
+)
+from adbx.app.runtime import ApplicationRuntime  # noqa: E402
+from adbx.app.store import ApplicationStore  # noqa: E402
 from adbx.data import indexing  # noqa: E402
 from adbx.data.expressions import SearchRow  # noqa: E402
 from adbx.data.fields import Field  # noqa: E402
@@ -60,7 +68,13 @@ from adbx.script import (  # noqa: E402
     ScriptStore,
 )
 from adbx.shell import screens  # noqa: E402
-from adbx.shell.controller import SCRIPTS_ITEMS  # noqa: E402
+from adbx.shell.applications import (  # noqa: E402
+    ApplicationEditor,
+    ApplicationSession,
+    BannerPainter,
+    ProtectionSession,
+)
+from adbx.shell.controller import APPLICATION_ITEMS, SCRIPTS_ITEMS  # noqa: E402
 from adbx.shell.designer import DesignerSession  # noqa: E402
 from adbx.shell.forms import FormDesigner  # noqa: E402
 from adbx.shell.global_update import GlobalSession  # noqa: E402
@@ -515,6 +529,42 @@ def main(argv: list[str] | None = None) -> int:
         debug_session._step()
         scripts_menu = screens.submenu_overlay(
             menu, list(SCRIPTS_ITEMS), 0, title="Scripts")
+        app_store = ApplicationStore(Path(temporary) / "apps")
+        demo_app = Application(
+            "AVSYSTEM", description="Alpha Video Store System",
+            startup="AVMOVIES.DBF",
+            menu=AppMenu(title="ALPHA VIDEO", items=[
+                AppItem("Customers", help_line="Enter or find customers",
+                        action="Macro", macro="C"),
+                AppItem("Movies", help_line="Work with the movie catalog",
+                        action="Sub-Menu",
+                        submenu=AppMenu(title="Movies Menu", items=[
+                            AppItem("Add a movie to inventory",
+                                    action="Macro", macro="E"),
+                            AppItem("Find and edit an existing movie",
+                                    action="Macro", macro="C"),
+                        ])),
+                AppItem("Invoices", help_line="Generate and print invoices",
+                        action="Macro", macro="I"),
+            ]),
+            banner=BannerScreen(
+                lines=["", "             ALPHA VIDEO",
+                       "", "       STORE MANAGEMENT SYSTEM",
+                       "", "        the system for the store"]) )
+        app_store.save(demo_app)
+        application_menu = screens.submenu_overlay(
+            menu, list(APPLICATION_ITEMS), 0, title="Applications")
+        app_parameters = ApplicationEditor(app_store, demo_app)
+        app_editor = ApplicationEditor(app_store, demo_app)
+        app_editor.stage = "outline"
+        app_editor.row = 2
+        app_editor.focus = "detail"
+        app_editor._load_detail()
+        app_runtime = ApplicationRuntime(app_store.get("AVSYSTEM"), app_store)
+        app_session = ApplicationSession(app_runtime)
+        app_session.start()
+        banner_painter = BannerPainter(demo_app)
+        protection = ProtectionSession(workspace, "AVMOVIES")
 
         shots = {
             "01-main-menu": menu,
@@ -560,6 +610,12 @@ def main(argv: list[str] | None = None) -> int:
             "42-script-variables": variable_view,
             "43-script-debugger": debug_session.view(),
             "44-menu-bar": menu_designer.view(),
+            "45-applications-menu": application_menu,
+            "46-app-parameters": app_parameters.view(),
+            "47-app-editor": app_editor.view(),
+            "48-app-runtime": app_session.view(),
+            "49-app-banner": banner_painter.view(),
+            "50-file-protection": protection.view(),
         }
         for name, view in shots.items():
             image = renderer.to_image(view.buffer)

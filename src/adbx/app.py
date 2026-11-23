@@ -121,9 +121,10 @@ class MainWindow(QMainWindow):
 
 
 def run(argv: list[str] | None = None, *, data: str | None = None,
-        open_path: str | None = None) -> int:
+        open_path: str | None = None, application: str | None = None) -> int:
     app = QApplication(sys.argv if argv is None else argv)
-    controller = ShellController(data, open_path=open_path)
+    controller = ShellController(data, open_path=open_path,
+                                 application=application)
     window = MainWindow(controller)
     window.show()
     return app.exec()

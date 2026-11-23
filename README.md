@@ -9,7 +9,7 @@ finestra con una griglia di caratteri scalabile (132×43, font TrueType), su un 
 su Linux, Windows e macOS.
 
 - Licenza: MIT
-- Stato: **O10 completata** — script, dialog box, menu bar, trigger e debugger
+- Stato: **O11 completata** — applicazioni, menu, banner, macro e protezioni
 - Piano completo: [`PLAN.md`](PLAN.md)
 - Diario di implementazione: [`DIARIO.md`](DIARIO.md)
 - Inventario funzionale estratto dai manuali:
@@ -28,6 +28,7 @@ su Linux, Windows e macOS.
   etichette e lettere [`docs/spec/10-etichette-lettere.md`](docs/spec/10-etichette-lettere.md),
   utility e I/O [`docs/spec/11-utility-io.md`](docs/spec/11-utility-io.md),
   script [`docs/spec/12-script.md`](docs/spec/12-script.md),
+  applicazioni [`docs/spec/13-applications.md`](docs/spec/13-applications.md),
   ambiente DOS di riferimento
   [`docs/spec/03-ambiente-dos-riferimento.md`](docs/spec/03-ambiente-dos-riferimento.md)
 - Schermate: [`docs/render/`](docs/render/)
@@ -152,6 +153,20 @@ Il designer dei dialog box gestisce Prompt, Button e Display; quello dei menu
 bar sostituisce il menu di View/Browse; il debugger avanza un token con `F10`.
 Il dialog runtime esegue le azioni dei Button e riporta i valori nelle
 variabili.
+
+Con **O11** si costruiscono applicazioni complete. `Applications` permette di
+eseguire, creare, modificare e cancellare applicazioni e di proteggere i
+supporting files. L'editor ha due finestre: l'outline indentato dei menu e i
+parametri della voce (testo, help line, azione, target, macro, password, help
+file). Le voci possono aprire sottomenu, eseguire macro, chiamare
+un'applicazione e tornarvi (`Call-App`, fino a 10 livelli) oppure saltare a
+un'altra (`GotO-App`); il `Menu flow` decide se tornare, restare o avanzare.
+`F8` simula i menu senza eseguire le azioni, `F3` registra la macro e `F4`
+apre il Macro Editor. Il banner painter gestisce testo e colori cella; il
+banner appare all'avvio. `Prevent/allow file alterations` blocca form,
+report, etichette, lettere, range, search/sort e regole di campo finché non
+vengono riabilitati. La riga di comando `--app NOME` avvia direttamente
+un'applicazione.
 
 ## Riferimenti
 

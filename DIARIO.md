@@ -726,11 +726,48 @@ Formato:
 
 ---
 
-## RIPRESA — checkpoint O10
+### 2026-11-23 — Ondata O11 — Applicazioni
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: application editor, parametri, banner, macro, simulate,
+  Call-App/GotO-App, password e prevent/allow file alterations.
+- File toccati: nuovi `src/adbx/app/` (model, store, runtime, protection),
+  `src/adbx/shell/applications.py` (editor, runtime, banner painter,
+  macro editor, protezioni), specifica `docs/spec/13-applications.md`,
+  screenshot `45`–`50`; aggiornati `controller.py` (menu Applications,
+  sessione, startup, banner, password, protezioni), `app.py`/`__main__.py`
+  (`--app`), `README.md`, `tools/capture_ui.py`; test nuovi
+  `test_applications`, `test_applications_ui`.
+- Scelte:
+  - **Albero di menu** con titolo, flusso Return/Stay/Advance, colonne e
+    spaziatura; outline piatto per l'editor e JSON annidato per il disco.
+  - **Stesso runtime** per esecuzione e simulazione; la simulazione non
+    esegue macro, Call-App o GotO-App.
+  - **Call-App** fino a 10 livelli con stack e ritorno; **GotO-App** sostituisce
+    l'applicazione e azzera lo stack.
+  - **Password** hash SHA-256 case-insensitive per voci e per ESC.
+  - **Banner** a celle con colori per cella solo dove differiscono dai
+    default; avvio con attesa di un tasto.
+  - **Protezioni** come impostazioni del workspace: bloccano l'apertura dei
+    designer, non i file.
+- Test: **425 passed**; `uvx ruff check src tests tools` pulito;
+  `./start.sh --smoke` e `--version` verdi.
+- Screenshot: `45-applications-menu`, `46-app-parameters`, `47-app-editor`,
+  `48-app-runtime`, `49-app-banner`, `50-file-protection`.
+- Problemi aperti / deviazioni dichiarate:
+  - Banner senza vero screen painter (linee e blocchi).
+  - Password hash senza salt e protezioni solo nel guscio.
+  - Menu di sfondo non implementati; il banner è l'unico sfondo.
+- Prossimo passo: O12 — Configurazione e stampa.
 
-- Ultimo commit: O10 (script).
-- Test: 394 verdi; ruff pulito; smoke e version verdi.
-- Specifiche: `docs/spec/12-script.md`; screenshot `39`–`44`.
-- Prossimo obiettivo: O11 — application editor, parametri, banner, macro,
-  simulate, call-app/goto-app, password, prevent/allow.
+---
+
+## RIPRESA — checkpoint O11
+
+- Ultimo commit: O11 (applicazioni).
+- Test: 425 verdi; ruff pulito; smoke e version verdi.
+- Specifiche: `docs/spec/13-applications.md`; screenshot `45`–`50`.
+- Prossimo obiettivo: O12 — configurazione, 26 driver di stampa, codici,
+  page advance, colori per database, default settings, documentation
+  generator.
 

@@ -11,6 +11,10 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ..app.model import AppError, AppItem, Application, outline
+from ..app.protection import is_protected
+from ..app.runtime import ApplicationRuntime
+from ..app.store import ApplicationStore
 from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ROW
 from ..data import indexing
 from ..data import rules as field_rules
@@ -37,6 +41,13 @@ from ..script.model import (
 from ..script.store import ScriptStore, script_template
 from ..script.variables import clean_name
 from . import screens
+from .applications import (
+    ApplicationEditor,
+    ApplicationSession,
+    BannerPainter,
+    MacroEditor,
+    ProtectionSession,
+)
 from .designer import DesignerSession
 from .files import strip_wildcard
 from .forms import FormDesigner
@@ -86,7 +97,7 @@ COMMAND_WAVES = {
     "indexes": "O3",
     "global": "O9",
     "layouts": "O6",
-    "applications": "O10",
+    "applications": "O11",
     "other": "O12",
 }
 
@@ -220,6 +231,14 @@ SCRIPTS_ITEMS: tuple[tuple[str, str], ...] = (
 )
 
 
+APPLICATION_ITEMS: tuple[tuple[str, str], ...] = (
+    ("Run an application", "run"),
+    ("Create/edit application", "edit"),
+    ("Erase an application", "erase"),
+    ("Prevent/allow file alterations", "protect"),
+)
+
+
 def _key_source(key: Key) -> str:
     """Rappresentazione di un tasto nel testo di uno script registrato."""
     char = character(key)
@@ -265,6 +284,7 @@ class ShellController:
 
     def __init__(self, root: str | Path | None = None, *,
                  open_path: str | Path | None = None,
+                 application: str | None = None,
                  theme: Theme = NEWPORT) -> None:
         self.state = ShellState(Path(root).expanduser() if root else default_root())
         self.theme = theme
@@ -305,6 +325,18 @@ class ShellController:
         self.dialog_runtime: DialogRuntime | None = None
         self.script_directory: Path | None = None
         self.script_engine: ScriptEngine | None = None
+        self.application_store_directory: Path | None = None
+        self.application_editor: ApplicationEditor | None = None
+        self.application_session: ApplicationSession | None = None
+        self.application_runtime: ApplicationRuntime | None = None
+        self.banner_painter: BannerPainter | None = None
+        self.macro_editor: MacroEditor | None = None
+        self.protection_session: ProtectionSession | None = None
+        self.application_return_base = "menu"
+        self.editing_application_macro: AppItem | None = None
+        self.pending_app_password = False
+        self.pending_app_escape = False
+        self._app_script_directory: Path | None = None
         self.pending_script_kind = ""
         self.pending_script_name = ""
         self.pending_script_description = ""
@@ -340,6 +372,8 @@ class ShellController:
         self.cursor = self.first = self._first_file_index()
         self._sync_input()
         self._autostart()
+        if application:
+            self._open_application_session_by_name(application)
 
     # -- accesso alle schermate -----------------------------------------
     def view(self) -> View:
@@ -387,6 +421,16 @@ class ShellController:
             base = self.script_debug.view()
         elif self.base == "scriptdialog" and self.dialog_runtime is not None:
             base = self.dialog_runtime.view()
+        elif self.base == "appeditor" and self.application_editor is not None:
+            base = self.application_editor.view()
+        elif self.base == "appsession" and self.application_session is not None:
+            base = self.application_session.view()
+        elif self.base == "bannerpainter" and self.banner_painter is not None:
+            base = self.banner_painter.view()
+        elif self.base == "macroeditor" and self.macro_editor is not None:
+            base = self.macro_editor.view()
+        elif self.base == "protection" and self.protection_session is not None:
+            base = self.protection_session.view()
         elif self.base == "directory":
             base = screens.directory(
                 self.state, self.cursor, self.input_text, self.input_cursor,
@@ -448,6 +492,7 @@ class ShellController:
                 "letters": "Form Letters",
                 "print": "Print",
                 "scripts": "Scripts",
+                "applications": "Applications",
             }.get(overlay.target, "Desktop Options")
             items = overlay.items or list(DESKTOP_ITEMS)
             return screens.submenu_overlay(base, items, overlay.selected,
@@ -554,6 +599,16 @@ class ShellController:
             self._handle_script_debug(key)
         elif self.base == "scriptdialog":
             self._handle_dialog_runtime(key)
+        elif self.base == "appeditor":
+            self._handle_app_editor(key)
+        elif self.base == "appsession":
+            self._handle_app_session(key)
+        elif self.base == "bannerpainter":
+            self._handle_banner_painter(key)
+        elif self.base == "macroeditor":
+            self._handle_macro_editor(key)
+        elif self.base == "protection":
+            self._handle_protection(key)
         elif self.base == "directory":
             self._handle_directory(key)
         elif self.base == "structure":
@@ -960,6 +1015,12 @@ class ShellController:
             self.overlay = Overlay("submenu", items=list(OTHER_ITEMS),
                                    target="other")
             return
+        if topic_id == "applications":
+            self.application_return_base = self.base
+            self.overlay = Overlay("submenu",
+                                   items=list(APPLICATION_ITEMS),
+                                   target="applications")
+            return
         wave = COMMAND_WAVES.get(topic_id, "a later wave")
         self._notice(f"{label} is not available yet (wave {wave}).")
 
@@ -1114,6 +1175,27 @@ class ShellController:
         if action == "script-path":
             self._set_script_path(text)
             return
+        if action == "app-name":
+            self._open_application_editor(text)
+            return
+        if action == "app-password":
+            self.overlay = None
+            session = self.application_session
+            if session is not None:
+                request = session.runtime.provide_password(text)
+                if request:
+                    self._handle_application_request(session)
+            self.pending_app_password = False
+            return
+        if action == "app-escape":
+            self.overlay = None
+            session = self.application_session
+            if session is not None and session.runtime.escape_password(text):
+                self._exit_application()
+            elif session is not None:
+                self._notice(session.runtime.status)
+            self.pending_app_escape = False
+            return
         if action.startswith("variable-edit:"):
             variable = action.split(":", 1)[1]
             self._script_engine().set_variable(variable, text)
@@ -1210,6 +1292,15 @@ class ShellController:
         assert overlay is not None
         action = overlay.action
         self.overlay = None
+        if action.startswith("delete-app:"):
+            name = action.split(":", 1)[1]
+            try:
+                self._application_store().delete(name)
+            except AppError as exc:
+                self._notice(str(exc))
+                return
+            self._notice(f"Application {name} erased.")
+            return
         if action.startswith("delete-script:"):
             name = action.split(":", 1)[1]
             try:
@@ -1685,8 +1776,20 @@ class ShellController:
     def _stop_recording(self) -> None:
         if self.recording is None:
             return
-        script = getattr(self, "_recording_script", None)
         source = self.recording_source + "".join(self.recording)
+        macro_editor = getattr(self, "_recording_macro", None)
+        macro_item = getattr(self, "_recording_macro_item", None)
+        if macro_editor is not None and macro_item is not None:
+            macro_item.macro = source[:3000]
+            macro_editor.dirty = True
+            macro_editor.rows = outline(macro_editor.app)
+            self.recording = None
+            self._recording_macro = None
+            self._recording_macro_item = None
+            self.base = "appeditor"
+            self._notice(f"Macro recorded ({len(source)} characters).")
+            return
+        script = getattr(self, "_recording_script", None)
         self.recording = None
         self._recording_script = None
         if script is None:
@@ -1839,6 +1942,9 @@ class ShellController:
             self.base = "menu"
 
     def script_end_app(self) -> None:
+        if self.application_session is not None:
+            self._exit_application()
+            return
         self.base = "menu"
         self._notice("Application ended.")
 
@@ -1904,6 +2010,371 @@ class ShellController:
                 return True
         return False
 
+
+
+    def _files_protected(self, kind: str) -> bool:
+        workspace = self._workspace()
+        if workspace is None:
+            return False
+        owner = self._form_owner()
+        if not owner:
+            owner = (self.active_set.name if self.active_set is not None
+                     else (self.database.name if self.database is not None
+                           else ""))
+        if owner and is_protected(workspace, owner, kind):
+            self._notice(f"{kind} for {owner} are protected. "
+                         "Use Applications, Prevent/allow file alterations.")
+            return True
+        return False
+
+    # -- applicazioni ----------------------------------------------------
+    def _application_store(self) -> ApplicationStore:
+        if self.application_store_directory is None:
+            root = (self.workspace.directory if self.workspace is not None
+                    else self.state.root)
+            configured = ""
+            if self.workspace is not None:
+                configured = self.workspace.setting("application_path", "")
+            self.application_store_directory = (
+                Path(configured).expanduser() if configured else
+                Path(root) / "objects" / "apps")
+        return ApplicationStore(self.application_store_directory)
+
+    def _application_action(self, action: str) -> None:
+        if action == "run":
+            self._choose_application("run-app", "Run an application")
+            return
+        if action == "edit":
+            self.overlay = Overlay(
+                "prompt", text="Application name",
+                action="app-name", action_title="Create/edit Application")
+            return
+        if action == "erase":
+            self._choose_application("erase-app", "Erase an application")
+            return
+        if action == "protect":
+            self._choose_protection_scope()
+            return
+
+    def _choose_application(self, action: str, title: str) -> None:
+        store = self._application_store()
+        names = store.names()
+        if not names:
+            self._notice("There are no applications in this directory.")
+            return
+        items = []
+        for name in names:
+            app = store.get(name, missing_ok=True)
+            if app is not None:
+                items.append((app.label, name))
+        self.overlay = Overlay("choose", text=title, items=items,
+                               action=action)
+
+    def _choose_protection_scope(self) -> None:
+        workspace = self._workspace()
+        if workspace is None:
+            self._notice("Open a database or set first.")
+            return
+        items = [(name, f"DB:{name}") for name in workspace.names()]
+        items += [(f"{name} (set)", f"SET:{name}")
+                  for name in workspace.set_names()]
+        if not items:
+            self._notice("There are no databases or sets in this directory.")
+            return
+        self.overlay = Overlay("choose", text="Protect files for",
+                               items=items, action="protect-scope")
+
+    def _open_application_editor(self, name: str) -> None:
+        store = self._application_store()
+        try:
+            app = store.get(name, missing_ok=True)
+        except AppError as exc:
+            self._notice(str(exc))
+            return
+        if app is None:
+            try:
+                app = Application(name)
+            except ValueError as exc:
+                self._notice(str(exc))
+                return
+        self.overlay = None
+        self.application_return_base = (self.base if self.base in
+                                        ("menu", "records") else "menu")
+        self.application_editor = ApplicationEditor(store, app, self.theme)
+        self.base = "appeditor"
+
+    def _handle_app_editor(self, key: Key) -> None:
+        session = self.application_editor
+        assert session is not None
+        if key.name == "F1" and not key.alt:
+            self._open_help(session.help_topic)
+            return
+        session.handle(key)
+        if session.banner_request:
+            session.banner_request = False
+            if not session.app.banner_enabled:
+                self._notice("Enable the application banner first.")
+            else:
+                self.banner_painter = BannerPainter(session.app, self.theme)
+                self.base = "bannerpainter"
+            return
+        if session.macro_request:
+            session.macro_request = False
+            row = session.current_row
+            if row is not None and row.kind == "item":
+                self.editing_application_macro = row.item
+                self.macro_editor = MacroEditor(row.item.macro, self.theme)
+                self.base = "macroeditor"
+            return
+        if session.learn_request:
+            session.learn_request = False
+            self._begin_macro_learning(session)
+            return
+        if session.simulate_request:
+            session.simulate_request = False
+            self._open_application_session(session.app, simulate=True)
+            return
+        if session.saved or session.close:
+            self.application_editor = None
+            self.base = (self.application_return_base
+                         if self.application_return_base in
+                         ("menu", "records") else "menu")
+            if session.status:
+                self._notice(session.status)
+
+    def _handle_banner_painter(self, key: Key) -> None:
+        session = self.banner_painter
+        assert session is not None
+        if key.name == "F1":
+            self._open_help(session.help_topic)
+            return
+        session.handle(key)
+        if session.saved or session.close:
+            self.banner_painter = None
+            self.base = "appeditor"
+            if session.status:
+                self._notice(session.status)
+
+    def _handle_macro_editor(self, key: Key) -> None:
+        session = self.macro_editor
+        assert session is not None
+        if key.name == "F1":
+            self._open_help(session.help_topic)
+            return
+        session.handle(key)
+        if session.close:
+            if session.saved and self.editing_application_macro is not None:
+                self.editing_application_macro.macro = session.body
+                if self.application_editor is not None:
+                    self.application_editor.dirty = True
+                    self.application_editor.rows = outline(
+                        self.application_editor.app)
+            self.macro_editor = None
+            self.editing_application_macro = None
+            self.base = "appeditor"
+
+    def _handle_protection(self, key: Key) -> None:
+        session = self.protection_session
+        assert session is not None
+        if key.name == "F1":
+            self._open_help(session.help_topic)
+            return
+        session.handle(key)
+        if session.close:
+            self.protection_session = None
+            self.base = "menu"
+
+    def _open_application_session_by_name(self, name: str) -> bool:
+        try:
+            app = self._application_store().get(name, missing_ok=True)
+        except AppError as exc:
+            self._notice(str(exc))
+            return False
+        if app is None:
+            self._notice(f"Application {name} not found.")
+            return False
+        self._open_application_session(app)
+        return True
+
+    def _open_application_session(self, app: Application, *,
+                                  simulate: bool = False) -> None:
+        self._apply_application_startup(app)
+        store = self._application_store()
+        runtime = ApplicationRuntime(app, store, simulate=simulate)
+        session = ApplicationSession(runtime, self.theme)
+        self.application_runtime = runtime
+        self.application_session = session
+        if not simulate:
+            self.application_return_base = (self.base if self.base in
+                                            ("menu", "records") else "menu")
+        self.base = "appsession"
+        self.overlay = None
+        if not session.banner_pending and app.startup_macro:
+            self._play_inline(app.startup_macro)
+
+    def _handle_app_session(self, key: Key) -> None:
+        session = self.application_session
+        assert session is not None
+        runtime = session.runtime
+        if key.name == "F1" and not key.alt:
+            session.handle(key)
+            if session.help_request:
+                path = session.help_request
+                session.help_request = ""
+                self._show_application_help(path)
+            else:
+                self._open_help(session.help_topic)
+            return
+        before_banner = session.banner_pending
+        session.handle(key)
+        if before_banner and not session.banner_pending:
+            if runtime.app.startup_macro:
+                self._play_inline(runtime.app.startup_macro)
+            return
+        if session.help_request:
+            path = session.help_request
+            session.help_request = ""
+            self._show_application_help(path)
+            return
+        if runtime.request:
+            self._handle_application_request(session)
+            return
+        if session.status:
+            self._notice(session.status)
+        runtime.status = ""
+
+    def _handle_application_request(self, session: ApplicationSession) -> None:
+        runtime = session.runtime
+        request = runtime.request
+        runtime.request = ""
+        item = runtime.requested_item
+        if request == "password":
+            self.pending_app_password = True
+            self.overlay = Overlay(
+                "prompt", text=f"Password for {item.text if item else 'choice'}",
+                action="app-password", action_title="Application Password",
+                secret=True)
+            return
+        if request == "escape-password":
+            self.pending_app_escape = True
+            self.overlay = Overlay(
+                "prompt", text="Escape password",
+                action="app-escape", action_title="Application Password",
+                secret=True)
+            return
+        if request == "macro" and item is not None:
+            self._play_inline(item.macro)
+            runtime.after_action()
+            return
+        if request == "call" and item is not None:
+            if runtime.call(item.target):
+                self._apply_application_startup(runtime.app)
+                runtime.after_action()
+            elif runtime.status:
+                self._notice(runtime.status)
+            return
+        if request == "goto" and item is not None:
+            if runtime.go_to(item.target):
+                self._apply_application_startup(runtime.app)
+            elif runtime.status:
+                self._notice(runtime.status)
+            return
+        if request == "exit":
+            self._exit_application()
+
+    def _exit_application(self) -> None:
+        runtime = self.application_runtime
+        session = self.application_session
+        if runtime is not None and runtime.call_stack:
+            runtime.return_from_call()
+            self._apply_application_startup(runtime.app)
+            return
+        if session is not None and session.runtime.simulate:
+            self.application_session = None
+            self.application_runtime = None
+            self.base = "appeditor"
+            return
+        self.application_session = None
+        self.application_runtime = None
+        if self._app_script_directory is not None:
+            self.script_directory = self._app_script_directory
+            if self.script_engine is not None:
+                self.script_engine.store = ScriptStore(self.script_directory)
+            self._app_script_directory = None
+        self.base = (self.application_return_base
+                     if self.application_return_base in ("menu", "records")
+                     else "menu")
+
+    def _apply_application_startup(self, app: Application) -> None:
+        data_path = (self.workspace.directory if self.workspace is not None
+                     else self.state.root)
+        if app.script_path:
+            value = app.script_path.replace("<DATAPATH>", str(data_path))
+            path = Path(value).expanduser()
+            if not path.is_absolute():
+                path = data_path / path
+            if self._app_script_directory is None:
+                self._app_script_directory = self.script_directory
+            self.script_directory = path
+            if self.script_engine is not None:
+                self.script_engine.store = ScriptStore(path)
+        engine = self._script_engine() if app.startup_macro else self.script_engine
+        if engine is not None:
+            engine.variables.set("%SYS_APP_PATH",
+                                 str(self._application_store().directory))
+            engine.variables.set("%SYS_APP_DESKTOP", str(data_path))
+        if app.startup:
+            self._open_application_startup(app.startup, data_path)
+
+    def _open_application_startup(self, startup: str, data_path: Path) -> None:
+        text = startup.strip()
+        path = Path(text).expanduser()
+        if not path.is_absolute():
+            path = data_path / path
+        if not path.suffix:
+            for suffix in (".SET", ".DBF"):
+                candidate = path.with_suffix(suffix)
+                if candidate.is_file():
+                    path = candidate
+                    break
+        if not path.is_file():
+            database = (self._workspace().get(path.stem.upper())
+                        if self._workspace() is not None else None)
+            if database is not None and path.suffix.upper() != ".SET":
+                self._adopt_database(database)
+                return
+        if path.suffix.upper() == ".SET" and path.is_file():
+            self._open_entry(path)
+            self.base = "appsession"
+            return
+        if path.is_file():
+            self._open_entry(path)
+            self.base = "appsession"
+
+    def _show_application_help(self, path: str) -> None:
+        try:
+            text = Path(path).expanduser().read_text(
+                encoding="utf-8", errors="replace")
+        except OSError:
+            self._notice(f"Help file {path} not found.")
+            return
+        lines = [line.rstrip() for line in text.splitlines() if line.strip()]
+        self._notice(" | ".join(lines[:3]) or "The help file is empty.")
+
+    def _begin_macro_learning(self, editor: ApplicationEditor) -> None:
+        row = editor.current_row
+        if row is None or row.kind != "item":
+            self._notice("Select a menu item first.")
+            return
+        self.recording_name = "MACRO"
+        self.recording_source = ""
+        self.recording = []
+        self._recording_macro = editor
+        self._recording_macro_item = row.item
+        self.overlay = None
+        self.base = "appeditor"
+        self._notice("Recording macro. Press ALT-F3 to stop.")
+
     # -- dispatch dei sottomenu -----------------------------------------
     def _activate_overlay_item(self) -> None:
         overlay = self.overlay
@@ -1949,6 +2420,8 @@ class ShellController:
             self._print_action(action)
         elif overlay.target == "scripts":
             self._script_action(action)
+        elif overlay.target == "applications":
+            self._application_action(action)
 
     def _design_action(self, action: str) -> None:
         if action == "create":
@@ -2012,6 +2485,9 @@ class ShellController:
         self._notice(f"Layouts → {action} is not available yet (later wave).")
 
     def _forms_action(self, action: str) -> None:
+        if action in ("create", "modify", "select", "erase") \
+                and self._files_protected("Forms"):
+            return
         workspace = self._workspace()
         owner = self._form_owner()
         if workspace is None or not owner:
@@ -2057,6 +2533,9 @@ class ShellController:
 
     # -- label -----------------------------------------------------------
     def _labels_action(self, action: str) -> None:
+        if action in ("create", "borrow", "erase") \
+                and self._files_protected("Mail labels"):
+            return
         workspace = self._workspace()
         owner = self._form_owner()
         if workspace is None or not owner:
@@ -2120,6 +2599,8 @@ class ShellController:
 
     # -- letter ----------------------------------------------------------
     def _letters_action(self, action: str) -> None:
+        if action in ("create", "erase") and self._files_protected("Letters"):
+            return
         workspace = self._workspace()
         owner = self._form_owner()
         if workspace is None or not owner:
@@ -2181,6 +2662,9 @@ class ShellController:
 
     # -- report ----------------------------------------------------------
     def _reports_action(self, action: str) -> None:
+        if action in ("create", "borrow", "erase") \
+                and self._files_protected("Reports"):
+            return
         workspace = self._workspace()
         owner = self._form_owner()
         if workspace is None or not owner:
@@ -2291,6 +2775,8 @@ class ShellController:
 
     # -- set -------------------------------------------------------------
     def _set_action(self, action: str) -> None:
+        if self._files_protected("Sets"):
+            return
         workspace = self._workspace()
         if workspace is None:
             self._notice("Open a database first.")
@@ -2406,6 +2892,8 @@ class ShellController:
 
     # -- field rules -----------------------------------------------------
     def _field_rules_action(self, action: str) -> None:
+        if self._files_protected("Field rules"):
+            return
         database = self.database
         if database is None:
             self._notice("Select a database first.")
@@ -2753,6 +3241,8 @@ class ShellController:
     def _start_range_session(self, *, return_base: str,
                              temporary: bool = False,
                              settings=None) -> None:
+        if not temporary and self._files_protected("Ranges"):
+            return
         database = self.database
         if database is None:
             self._notice("Select a database first.")
@@ -2828,6 +3318,8 @@ class ShellController:
 
     def _start_search_session(self, *, letter: str | None = None,
                               existing=None) -> None:
+        if self._files_protected("Search/Sort lists"):
+            return
         database = self.database
         if database is None:
             self._notice("Select a database first.")
@@ -3017,6 +3509,24 @@ class ShellController:
         action = overlay.action
         self.overlay = None
         database = self.database
+        if action == "run-app":
+            self._open_application_session_by_name(value)
+            return
+        if action == "erase-app":
+            self.overlay = Overlay("confirm",
+                                   text=f"Erase application {value}?",
+                                   action=f"delete-app:{value}")
+            return
+        if action == "protect-scope":
+            scope, _, owner = value.partition(":")
+            workspace = self._workspace()
+            if workspace is None:
+                return
+            self.protection_session = ProtectionSession(
+                workspace, owner, self.theme)
+            self.application_return_base = self.base
+            self.base = "protection"
+            return
         if action == "modify-script":
             self._open_script(value)
             return
