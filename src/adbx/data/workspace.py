@@ -61,6 +61,7 @@ class Database:
     fields: tuple[Field, ...]
     source: Path
     origin: str = "imported"
+    description: str = ""
     password_hash: str | None = None
     password_salt: str | None = None
     unlocked: bool = True
@@ -339,6 +340,7 @@ class Workspace:
                 fields TEXT NOT NULL,
                 source TEXT NOT NULL,
                 origin TEXT NOT NULL DEFAULT 'imported',
+                description TEXT NOT NULL DEFAULT '',
                 created REAL NOT NULL,
                 updated REAL NOT NULL,
                 password_hash TEXT,
@@ -461,6 +463,12 @@ class Workspace:
             );
             """
         )
+        columns = {row["name"] for row in self._connection.execute(
+            "PRAGMA table_info(adbx_databases)")}
+        if "description" not in columns:
+            self._connection.execute(
+                "ALTER TABLE adbx_databases ADD COLUMN description TEXT "
+                "NOT NULL DEFAULT ''")
         for row in self._connection.execute("SELECT name FROM adbx_databases"):
             self._ensure_database_state(row["name"])
         self._connection.commit()
@@ -915,6 +923,7 @@ class Workspace:
             fields=fields,
             source=Path(row["source"]),
             origin=row["origin"],
+            description=str(row["description"] or ""),
             password_hash=row["password_hash"],
             password_salt=row["password_salt"],
             unlocked=not bool(row["password_hash"]),
@@ -930,7 +939,8 @@ class Workspace:
         return self.import_dbf(path)
 
     def create_database(self, name: str, fields: Sequence[Field],
-                        *, password: str | None = None) -> Database:
+                        *, password: str | None = None,
+                        description: str = "") -> Database:
         name = name.strip().upper()
         if name.endswith(".DBF"):
             name = name[:-4]
@@ -954,11 +964,11 @@ class Workspace:
         now = time.time()
         self._connection.execute(
             "INSERT INTO adbx_databases (name, table_name, memo_table, fields, "
-            "source, origin, created, updated, password_hash, password_salt) "
-            "VALUES (?, ?, ?, ?, ?, 'created', ?, ?, ?, ?)",
+            "source, origin, description, created, updated, password_hash, "
+            "password_salt) VALUES (?, ?, ?, ?, ?, 'created', ?, ?, ?, ?, ?)",
             (name, table, memo_table,
              json.dumps([field.to_dict() for field in fields]),
-             str(source), now, now, hash_value, salt),
+             str(source), description, now, now, hash_value, salt),
         )
         self._connection.commit()
         self._ensure_database_state(name)
@@ -1162,6 +1172,49 @@ class Workspace:
         self._connection.execute(
             "UPDATE adbx_databases SET updated = ? WHERE name = ?",
             (time.time(), database.name))
+        self._connection.commit()
+
+    def copy_support_files(self, source: str, target: str) -> None:
+        """Copia regole, form, report, etichette e lettere fra due database.
+
+        Gli indici non si copiano: le chiavi del nuovo database potrebbero
+        non essere valide, come avverte il manuale per Inherit support files.
+        """
+        source = source.strip().upper()
+        target = target.strip().upper()
+        connection = self._connection
+        connection.execute(
+            "INSERT OR REPLACE INTO adbx_field_rules (owner, field, rules) "
+            "SELECT ?, field, rules FROM adbx_field_rules WHERE owner = ?",
+            (target, source))
+        for table, key_columns in (
+                ("adbx_forms", ("letter", "description", "definition",
+                                "active", "updated")),
+                ("adbx_labels", ("letter", "description", "definition",
+                                 "updated")),
+                ("adbx_reports", ("letter", "description", "definition",
+                                  "updated")),
+                ("adbx_letters", ("name", "description", "body", "updated"))):
+            columns = ", ".join(key_columns)
+            connection.execute(
+                f"INSERT OR REPLACE INTO {table} (owner, {columns}) "
+                f"SELECT ?, {columns} FROM {table} WHERE owner = ?",
+                (target, source))
+        for table, key_columns in (
+                ("adbx_ranges", ("letter", "description", "settings")),
+                ("adbx_searches", ("letter", "definition", "version"))):
+            columns = ", ".join(key_columns)
+            connection.execute(
+                f"INSERT OR REPLACE INTO {table} (database, {columns}) "
+                f"SELECT ?, {columns} FROM {table} WHERE database = ?",
+                (target, source))
+        connection.commit()
+
+    def set_description(self, name: str, description: str) -> None:
+        self._connection.execute(
+            "UPDATE adbx_databases SET description = ?, updated = ? "
+            "WHERE name = ?", (description.strip(), time.time(),
+                               name.strip().upper()))
         self._connection.commit()
 
     # -- password --------------------------------------------------------

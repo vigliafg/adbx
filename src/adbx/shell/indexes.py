@@ -830,7 +830,8 @@ class RangeSession:
                 self._commit_row()
 
     def _apply(self, *, save: bool = False) -> None:
-        self.database.save_current_range(self.settings)
+        if not self.temporary:
+            self.database.save_current_range(self.settings)
         self.applied = True
         self.close = True
         self.status = "Range applied."

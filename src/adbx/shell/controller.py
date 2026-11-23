@@ -25,17 +25,21 @@ from . import screens
 from .designer import DesignerSession
 from .files import strip_wildcard
 from .forms import FormDesigner
+from .global_update import GlobalSession
 from .help import link_spans, topic, wrap_topic
 from .indexes import IndexSession, RangeSession
 from .labels import LabelDesigner
 from .letters import LetterEditor
 from .records import RecordSession
+from .relational import RelationalSession
 from .reports import ReportDesigner, ReportPreview
 from .rules import RulesSession
 from .searching import SearchSession
 from .sets import SetDesigner, SetSession
 from .state import ShellState, default_root, demo_state
 from .theme import NEWPORT, Theme
+from .transfer import TransferSession
+from .utilities import UtilitySession
 from .widgets import View
 
 INPUT_LABEL = "Enter name of the database/set"
@@ -132,10 +136,22 @@ RULES_ITEMS: tuple[tuple[str, str], ...] = (
 )
 
 UTILITY_ITEMS: tuple[tuple[str, str], ...] = (
-    ("Pack database", "pack"),
     ("Copy database", "copy"),
     ("Append to database", "append"),
     ("Summarize database", "summarize"),
+    ("Pack database", "pack"),
+    ("Zap database", "zap"),
+    ("Cross Tabulation", "crosstab"),
+    ("Relational commands", "relational"),
+    ("Import data", "import"),
+    ("Export data", "export"),
+)
+
+RELATIONAL_ITEMS: tuple[tuple[str, str], ...] = (
+    ("Post database", "post"),
+    ("Join database", "join"),
+    ("Intersect database", "intersect"),
+    ("Subtract database", "subtract"),
 )
 
 INDEX_ITEMS: tuple[tuple[str, str], ...] = (
@@ -223,6 +239,10 @@ class ShellController:
         self.report_preview: ReportPreview | None = None
         self.label_designer: LabelDesigner | None = None
         self.letter_editor: LetterEditor | None = None
+        self.utility_session: UtilitySession | None = None
+        self.relational_session: RelationalSession | None = None
+        self.transfer_session: TransferSession | None = None
+        self.global_session: GlobalSession | None = None
         self.pending_index_name = ""
         self.pending_locate_text = ""
         self.pending_replace: list[str] = []
@@ -266,6 +286,14 @@ class ShellController:
             base = self.label_designer.view()
         elif self.base == "lettereditor" and self.letter_editor is not None:
             base = self.letter_editor.view()
+        elif self.base == "utility" and self.utility_session is not None:
+            base = self.utility_session.view()
+        elif self.base == "relational" and self.relational_session is not None:
+            base = self.relational_session.view()
+        elif self.base == "transfer" and self.transfer_session is not None:
+            base = self.transfer_session.view()
+        elif self.base == "global" and self.global_session is not None:
+            base = self.global_session.view()
         elif self.base == "directory":
             base = screens.directory(
                 self.state, self.cursor, self.input_text, self.input_cursor,
@@ -298,6 +326,7 @@ class ShellController:
                 "records": "View/Enter Records",
                 "design": "Database/set Design",
                 "utilities": "Utilities",
+                "relational": "Relational Commands",
                 "indexes": "Indexes/Ranges",
                 "search": "Search/Sort Lists",
                 "global": "Global Update/Delete",
@@ -372,6 +401,14 @@ class ShellController:
             self._handle_label_designer(key)
         elif self.base == "lettereditor":
             self._handle_letter_editor(key)
+        elif self.base == "utility":
+            self._handle_utility_session(key)
+        elif self.base == "relational":
+            self._handle_relational_session(key)
+        elif self.base == "transfer":
+            self._handle_transfer_session(key)
+        elif self.base == "global":
+            self._handle_global_session(key)
         elif self.base == "directory":
             self._handle_directory(key)
         elif self.base == "structure":
@@ -1064,6 +1101,17 @@ class ShellController:
                 self.database.clear_field_rules()
                 self._notice("Field rules erased.")
             return
+        if action == "zap-database":
+            if self.database is not None:
+                name = self.database.name
+                try:
+                    self.database.zap()
+                    self.database.workspace.save_database(self.database)
+                except (WorkspaceError, OSError) as exc:
+                    self._notice(f"Cannot zap: {exc}")
+                    return
+                self._notice(f"Zapped {name}; the structure is unchanged.")
+            return
         if action == "replace-all":
             find = self.pending_replace[0] if self.pending_replace else ""
             replacement = (self.pending_replace[1]
@@ -1108,6 +1156,8 @@ class ShellController:
             self._design_action(action)
         elif overlay.target == "utilities":
             self._utility_action(action)
+        elif overlay.target == "relational":
+            self._relational_action(action)
         elif overlay.target == "indexes":
             self._index_action(action)
         elif overlay.target == "search":
@@ -1652,7 +1702,181 @@ class ShellController:
             self._notice(f"Packed {removed} deleted record(s); "
                          f"{remaining} remain.")
             return
-        self._notice(f"Utilities → {action} is not available yet (wave O9).")
+        if action == "zap":
+            if self.database is None:
+                self._notice("Select a database first.")
+                return
+            self.overlay = Overlay(
+                "confirm",
+                text=f"Zap {self.database.name}? All records are removed.",
+                action="zap-database")
+            return
+        if action == "relational":
+            if self.database is None:
+                self._notice("Select a database first.")
+                return
+            self.overlay = Overlay("submenu", items=list(RELATIONAL_ITEMS),
+                                   target="relational")
+            return
+        workspace = self._workspace()
+        if workspace is None:
+            self._notice("Open a database first.")
+            return
+        if action in ("import", "export"):
+            self.transfer_session = TransferSession(
+                workspace, self.database,
+                "import" if action == "import" else "export", self.theme)
+            self.base = "transfer"
+            return
+        if action in ("copy", "append", "summarize", "crosstab"):
+            if self.database is None:
+                self._notice("Select a database first.")
+                return
+            self.utility_session = UtilitySession(
+                workspace, self.database, self.active_set, action, self.theme)
+            self.base = "utility"
+            return
+
+    def _relational_action(self, action: str) -> None:
+        self.overlay = None
+        if self.database is None:
+            self._notice("Select a database first.")
+            return
+        if self.active_set is not None:
+            self._notice("Relational commands work on a single database.")
+            return
+        self.relational_session = RelationalSession(
+            self._workspace(), self.database, action, self.theme)
+        self.base = "relational"
+
+    def _handle_utility_session(self, key: Key) -> None:
+        session = self.utility_session
+        assert session is not None
+        if key.name == "F1" and not key.alt:
+            self._open_help(session.help_topic())
+            return
+        session.request = ""
+        session.handle(key)
+        if session.request == "range":
+            self._start_range_session(return_base="utility",
+                                      settings=session.settings,
+                                      temporary=True)
+            return
+        if session.close:
+            self._finish_utility_session()
+
+    def _finish_utility_session(self) -> None:
+        session = self.utility_session
+        self.utility_session = None
+        self.base = "menu"
+        if session is None:
+            return
+        if session.result is not None:
+            self._notice(session.result.message())
+            if session.command == "crosstab" and session.see_results \
+                    and session.result.output is not None:
+                database = self._open_database(session.result.output.source)
+                if database is not None:
+                    try:
+                        self.state.open(database.source)
+                    except OSError:
+                        pass
+        elif session.status:
+            self._notice(session.status)
+
+    def _handle_relational_session(self, key: Key) -> None:
+        session = self.relational_session
+        assert session is not None
+        if key.name == "F1" and not key.alt:
+            self._open_help("utilities")
+            return
+        session.request = ""
+        session.handle(key)
+        if session.request == "range":
+            self._start_range_session(return_base="relational",
+                                      settings=session.settings,
+                                      temporary=True)
+            return
+        if session.close:
+            self._finish_relational_session()
+
+    def _finish_relational_session(self) -> None:
+        session = self.relational_session
+        self.relational_session = None
+        self.base = "menu"
+        if session is None:
+            return
+        if session.result is not None:
+            self._notice(session.result.message())
+        elif session.status:
+            self._notice(session.status)
+
+    def _handle_transfer_session(self, key: Key) -> None:
+        session = self.transfer_session
+        assert session is not None
+        if key.name == "F1" and not key.alt:
+            self._open_help("utilities")
+            return
+        session.request = ""
+        session.handle(key)
+        if session.request == "range":
+            self._start_range_session(return_base="transfer",
+                                      settings=session.settings,
+                                      temporary=True)
+            return
+        if session.close:
+            self._finish_transfer_session()
+
+    def _finish_transfer_session(self) -> None:
+        session = self.transfer_session
+        self.transfer_session = None
+        self.base = "menu"
+        if session is None:
+            return
+        if session.result is not None:
+            self._notice(session.status or "Transfer complete.")
+            if session.mode == "import" and session.target_name:
+                database = (session.workspace.get(session.target_name)
+                            if session.workspace is not None else None)
+                if database is not None:
+                    self.database = database
+                    self.state.database = database
+                    self.state.set_name = ""
+                    try:
+                        self.state.open(database.source)
+                    except OSError:
+                        self.state.current = None
+        elif session.status:
+            self._notice(session.status)
+
+    def _handle_global_session(self, key: Key) -> None:
+        session = self.global_session
+        assert session is not None
+        if key.name == "F1" and not key.alt:
+            self._open_help("utilities")
+            return
+        session.request = ""
+        session.handle(key)
+        if session.request == "range":
+            self._start_range_session(return_base="global",
+                                      settings=session.settings,
+                                      temporary=True)
+            return
+        if session.close:
+            self._finish_global_session()
+
+    def _finish_global_session(self) -> None:
+        session = self.global_session
+        self.global_session = None
+        self.base = "menu"
+        if session is None:
+            return
+        if session.result is not None:
+            self._notice(session.result.message())
+            if self.records is not None:
+                self.records.apply_range()
+        elif session.status:
+            self._notice(session.status)
 
     # -- indici, range e search/sort ------------------------------------
     def _active_database(self) -> Database | None:
@@ -1806,7 +2030,17 @@ class ShellController:
         if session.applied and self.return_base == "menu" \
                 and self.records is not None:
             self.records.apply_range()
-        if session.status:
+        if session.applied and self.return_base in (
+                "utility", "relational", "transfer", "global"):
+            target = {
+                "utility": self.utility_session,
+                "relational": self.relational_session,
+                "transfer": self.transfer_session,
+                "global": self.global_session,
+            }[self.return_base]
+            if target is not None:
+                target.set_range(session.settings)
+        if session.status and not session.applied:
             self._notice(session.status)
         self.base = self.return_base
         if self.pending_saved_search:
@@ -1939,8 +2173,11 @@ class ShellController:
         if action == "duplicates":
             self._delete_duplicates()
             return
-        self._notice(f"Global update → {action} is not available yet "
-                     "(wave O9).")
+        if self.database is None:
+            self._notice("Select a database first.")
+            return
+        self.global_session = GlobalSession(self.database, action, self.theme)
+        self.base = "global"
 
     def _delete_duplicates(self) -> None:
         database = self.database

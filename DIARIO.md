@@ -616,3 +616,82 @@ Formato:
     interattivo per lettera.
   - L'editor non ha block copy/move né clipboard delle lettere.
 - Prossimo passo: O9 — Utility e I/O.
+
+---
+
+### 2026-11-23 — Ondata O9 — Utility e I/O
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: copy, append nelle quattro modalità, summarize, cross
+  tabulation, post, join/intersect/subtract, global update/delete e
+  import/export nei formati del manuale.
+- File toccati: nuovi `src/adbx/data/utilities.py` (operazioni sui record e
+  relazionali), `src/adbx/io/` (common, delimited, fixed, dif, sylk, lotus,
+  dbf2, wordperfect, formats), `src/adbx/shell/utilities.py` (copy, append,
+  summarize, crosstab), `src/adbx/shell/relational.py` (post e comandi
+  relazionali), `src/adbx/shell/transfer.py` (import/export con Field
+  Adjust), `src/adbx/shell/global_update.py`, specifica
+  `docs/spec/11-utility-io.md`, screenshot `32-copy-database.png` …
+  `38-delete-range.png`; aggiornati `workspace.py` (descrizione database,
+  copia support files, migrazione), `controller.py` (menu Utilities e
+  Relational, sessioni, range temporaneo, Zap), `help.py`, `README.md`,
+  `tools/capture_ui.py`; test nuovi `test_utilities`, `test_io`,
+  `test_utilities_ui`; aggiornato `test_records` per il nuovo ordine del
+  menu Utilities.
+- Scelte:
+  - **Nessun formato proprietario**: le utility lavorano sul workspace
+    SQLite e creano database normali; il `.DBF` resta il formato di scambio.
+  - **Copy** copia tutti o alcuni campi, anche da un set (primario e link
+    uno-a-uno), in ordine di primary index; `Inherit support files` copia
+    regole, form, report, etichette, lettere, range e search/sort, non gli
+    indici.
+  - **Append**: `All`, `Unique`, `Replace existing, add unique`, `Replace
+    existing, mark unique`; filtro sul database esterno, mappatura campo per
+    campo, chiave calcolata sui valori che il record avrà nel master.
+  - **Summarize**: sette tipi del manuale più `Group` e `Null`; `Total` e
+    `Average` allargano il campo di due caratteri; totale troppo grande
+    diventa zero; Record Number e Search/Sort list non raggruppano.
+  - **Crosstab**: colonne automatiche dai valori distinti o esplicite con
+    espressioni; nomi normalizzati a 10 caratteri; names database
+    `SHORT C10`/`FULL C60`.
+  - **Post**: espressione comune, filtro, `Add`/`Subtract`/`Replace`,
+    condizione per campo, status logico e marcatura degli unmatched; più
+    record master con la stessa chiave vengono aggiornati tutti.
+  - **Join/Intersect/Subtract**: left outer join, inner join, anti-join;
+    indice secondario e normalizzazione della chiave; collisioni di nome
+    risolte con suffisso.
+  - **Global update/delete**: update one-time di massimo 20 campi, sei
+    conversioni di maiuscole, delete/undelete del range.
+  - **Import/export**: dieci formati con fixture di andata e ritorno;
+    dBASE II con intestazione di 10 byte e 32 campi; Lotus WK1 in scrittura
+    e WKS/WK1 in lettura, date seriali; WordPerfect con `{END FIELD}` e
+    `{END RECORD}`; MultiMate come documento secondario testuale.
+  - **Field Adjust** nell'import: nome, tipo, lunghezza e decimali
+    modificabili prima della creazione; le impostazioni non si salvano in
+    file `A4.I?x`.
+- Test: **338 passed**; `uvx ruff check src tests tools` pulito;
+  `./start.sh --smoke` e `--version` verdi.
+- Screenshot: `32-copy-database`, `33-crosstab`, `34-relational-join`,
+  `35-import-options`, `36-export-fields`, `37-global-update`,
+  `38-delete-range`.
+- Problemi aperti / deviazioni dichiarate:
+  - Copy/summarize da set usano primario e link uno-a-uno; i campi
+    uno-a-molti non hanno un valore unico.
+  - `Inherit support files` non copia indici; le definizioni update salvate
+    e le import settings `A4.I?x` non sono implementate.
+  - MultiMate non replica la codifica binaria originale; PFS:File e DBMII
+    restano esclusi come da non-obiettivi.
+  - Non c'è stampa diretta: export e PDF sono i canali di uscita.
+- Prossimo passo: O10 — Script.
+
+---
+
+## RIPRESA — checkpoint O9
+
+- Ultimo commit: O9 (utility e I/O).
+- Test: 338 verdi; ruff pulito; smoke e version verdi.
+- Specifiche: `docs/spec/11-utility-io.md`; screenshot `32`–`38`.
+- Prossimo obiettivo: O10 — keystroke engine, registrazione e `Screen Test`,
+  dialog box, menu bar script, 40 comandi, variabili, `%SYS_*`, 17 trigger,
+  debugger, `AUTOEXEC`, `nomeDB!`, `CTRL-F1..10`, `Tools`; accettazione
+  lezioni 24 e 25.

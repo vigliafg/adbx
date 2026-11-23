@@ -149,8 +149,10 @@ def test_lesson_6_delete_recall_and_pack(tmp_path):
     _mode(controller, 0)  # View again
     controller.handle(Key("D", alt=True))  # delete again
     controller.handle(Key("F10"))
-    controller.handle(Key("U"))  # Utilities -> Pack
-    controller.handle(Key("ENTER"))
+    controller.handle(Key("U"))  # Utilities
+    for _step in range(3):
+        controller.handle(Key("DOWN"))
+    controller.handle(Key("ENTER"))  # Pack database
     assert controller.overlay is not None
     assert "Packed 1 deleted record" in controller.overlay.text
     assert controller.database.count(include_deleted=True) == 2

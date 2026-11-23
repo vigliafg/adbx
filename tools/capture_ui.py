@@ -49,10 +49,12 @@ from adbx.render.qt_renderer import CellRenderer  # noqa: E402
 from adbx.shell import screens  # noqa: E402
 from adbx.shell.designer import DesignerSession  # noqa: E402
 from adbx.shell.forms import FormDesigner  # noqa: E402
+from adbx.shell.global_update import GlobalSession  # noqa: E402
 from adbx.shell.indexes import IndexSession, RangeSession  # noqa: E402
 from adbx.shell.labels import LabelDesigner  # noqa: E402
 from adbx.shell.letters import LetterEditor  # noqa: E402
 from adbx.shell.records import RecordSession  # noqa: E402
+from adbx.shell.relational import RelationalSession  # noqa: E402
 from adbx.shell.reports import ReportDesigner, ReportPreview  # noqa: E402
 from adbx.shell.rules import (  # noqa: E402
     LookupTableEditor,
@@ -62,6 +64,8 @@ from adbx.shell.rules import (  # noqa: E402
 from adbx.shell.searching import SearchSession  # noqa: E402
 from adbx.shell.sets import SetDesigner, SetSession  # noqa: E402
 from adbx.shell.state import demo_state  # noqa: E402
+from adbx.shell.transfer import TransferSession  # noqa: E402
+from adbx.shell.utilities import UtilitySession  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -391,6 +395,63 @@ def main(argv: list[str] | None = None) -> int:
             database=database)
         state.database = None
 
+        indexing.save_index(items, indexing.IndexDefinition(
+            "AVITMTAP", "TAPE_ID"))
+        copy_session = UtilitySession(
+            workspace, database, None, "copy")
+        copy_session.stage = "options"
+        copy_session.name = "AVCOPY"
+        copy_session.description = "Working copy of the movie catalog"
+        copy_session._load_row()
+        crosstab_session = UtilitySession(
+            workspace, database, None, "crosstab")
+        crosstab_session.stage = "options"
+        crosstab_session.name = "AVXTAB"
+        crosstab_session.row_field = "SUBJECT"
+        crosstab_session.column_field = "RATING"
+        crosstab_session.tab_field = "RUNTIME"
+        crosstab_session.operation = "Average"
+        crosstab_session.create_names = True
+        crosstab_session.names_name = "AVXTABN"
+        crosstab_session._load_row()
+        join_session = RelationalSession(
+            workspace, database, "join")
+        join_session.picker = None
+        join_session.secondary = items
+        join_session.secondary_name = "AVITEMS"
+        join_session.index_name = "AVITMTAP"
+        join_session.common_expression = "TAPE_ID"
+        join_session._prepare_index_fields()
+        join_session.stage = "common"
+        join_session._load_row()
+        import_session = TransferSession(
+            workspace, database, "import")
+        import_session.picker = None
+        import_session.format_key = "delimited"
+        import_session.path_text = "C:\\ALPHA4\\PATRONS.ASC"
+        import_session.stage = "options"
+        import_session._load_row()
+        export_session = TransferSession(
+            workspace, database, "export")
+        export_session.picker = None
+        export_session.format_key = "csv"
+        export_session.path_text = "C:\\ALPHA4\\MOVIES.CSV"
+        export_session.chosen = [field.name for field in database.fields]
+        export_session.stage = "fields"
+        export_session._load_row()
+        update_session = GlobalSession(
+            database, "update-field")
+        update_session.expressions = [
+            ("TAPETITLE", "UPPER(TAPETITLE)"),
+            ("RENTPRICE", "RENTPRICE * 1.10"),
+        ]
+        update_session.stage = "expressions"
+        update_session._load_row()
+        delete_session = GlobalSession(
+            database, "delete-range")
+        delete_session.stage = "confirm"
+        delete_session._load_row()
+
         shots = {
             "01-main-menu": menu,
             "02-directory": directory,
@@ -422,6 +483,13 @@ def main(argv: list[str] | None = None) -> int:
             "29-label-preview": label_preview.view(),
             "30-letter-editor": letter_editor.view(),
             "31-letter-preview": letter_preview.view(),
+            "32-copy-database": copy_session.view(),
+            "33-crosstab": crosstab_session.view(),
+            "34-relational-join": join_session.view(),
+            "35-import-options": import_session.view(),
+            "36-export-fields": export_session.view(),
+            "37-global-update": update_session.view(),
+            "38-delete-range": delete_session.view(),
         }
         for name, view in shots.items():
             image = renderer.to_image(view.buffer)

@@ -9,7 +9,7 @@ finestra con una griglia di caratteri scalabile (132×43, font TrueType), su un 
 su Linux, Windows e macOS.
 
 - Licenza: MIT
-- Stato: **O8 completata** — etichette con giustificazioni avanzate e lettere con condizionali e include
+- Stato: **O9 completata** — utility sui dati, comandi relazionali e import/export in dieci formati
 - Piano completo: [`PLAN.md`](PLAN.md)
 - Diario di implementazione: [`DIARIO.md`](DIARIO.md)
 - Inventario funzionale estratto dai manuali:
@@ -26,6 +26,7 @@ su Linux, Windows e macOS.
   form designer [`docs/spec/08-form.md`](docs/spec/08-form.md),
   report engine [`docs/spec/09-report.md`](docs/spec/09-report.md),
   etichette e lettere [`docs/spec/10-etichette-lettere.md`](docs/spec/10-etichette-lettere.md),
+  utility e I/O [`docs/spec/11-utility-io.md`](docs/spec/11-utility-io.md),
   ambiente DOS di riferimento
   [`docs/spec/03-ambiente-dos-riferimento.md`](docs/spec/03-ambiente-dos-riferimento.md)
 - Schermate: [`docs/render/`](docs/render/)
@@ -115,6 +116,26 @@ marcatori `[CAMPO]`, `[{espressione}]`, `[?prompt]`, comandi `[.WIDTH]`,
 condizionali `[.IF]` / `[.ELSEIF]` / `[.ELSE]` / `[.ENDIF]` annidati. Sia le
 etichette sia le lettere si vedono in anteprima, si stampano in PDF e si
 stampano da `Print`.
+
+Con **O9** arrivano le utility sui dati e lo scambio con l'esterno.
+`Utilities → Copy database` copia tutti o alcuni campi in un nuovo database,
+anche da un set, con il range attivo; `Append to database` ha le quattro
+modalità del manuale (`All`, `Unique`, `Replace existing, add unique`,
+`Replace existing, mark unique`) con filtro e mappatura dei campi;
+`Summarize database` raggruppa per primary index e calcola `Group`, `Total`,
+`Count`, `Average`, `Biggest`, `Smallest`, `First`, `Last`, `Null`;
+`Cross Tabulation` incrocia due campi con colonne automatiche o esplicite e
+un names database; `Relational commands` esegue `Post`, `Join`, `Intersect`
+e `Subtract`; `Pack` e `Zap` chiudono la manutenzione. `Global update/delete`
+aggiorna fino a 20 campi con espressioni, cambia maiuscole e cancella o
+richiama un range.
+
+`Utilities → Import data` ed `Export data` leggono e scrivono dieci formati:
+dBASE II, dBASE III/IV, ASCII separato, CSV, ASCII tabellare a colonne
+fisse, DIF, SYLK, Lotus WKS/WK1, WordPerfect merge e MultiMate. Ogni formato
+ha una prova di andata e ritorno; le impostazioni ASCII (separatore,
+virgolette, intestazione, spazi finali) e la Field Adjust permettono di
+correggere tipi e lunghezze prima di creare il database.
 
 ## Riferimenti
 
