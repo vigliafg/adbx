@@ -828,12 +828,37 @@ Formato:
 
 ---
 
-## RIPRESA — checkpoint O13 — release 1.0.0
+### 2026-11-23 — Automazione DOSBox e conferma visiva end-to-end
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: pilotare l'originale con la REST API di dosbox-automation e
+  aggiungere test end-to-end con screenshot versionati.
+- File toccati: nuovi `tools/dosbox_automation.py` (avvio headless via Xvfb,
+  token, mount policy, testo/frame/tasti, download del binario),
+  `tools/e2e_visual.py` (8 scenari adbx + 2 catture DOSBox),
+  `tests/test_dosbox_automation.py`, `docs/e2e/` (immagini + manifest);
+  aggiornati `README.md` e `.github/workflows/ci.yml` (step E2E visuale).
+- Scelte:
+  - **dosbox-automation** (GPL-2.0) resta fuori dal repository: lo script lo
+    cerca in cache, lo scarica con `--download` e isola config/token.
+  - **REST API**: `/video/text` per le attese, `/video/frame` per il PNG,
+    `/input/type` e `/input/sequence` per l'interazione.
+  - **Xvfb** quando manca `DISPLAY`, così l'automazione gira in CI/headless.
+  - **8 scenari adbx** verificano testo atteso, dimensioni, colori campionati
+    e hash; `--dosbox` aggiunge menu e View records dell'originale.
+- Test: **485 passed**, nessuno saltato; ruff pulito; smoke e version verdi.
+- Artefatti: `docs/e2e/README.md`, `docs/e2e/manifest.json`,
+  `docs/e2e/adbx/*.png`, `docs/e2e/dosbox/*.png`.
+- Nota: il test pytest non richiede il binario DOSBox; la cattura originale
+  si esegue con `python tools/e2e_visual.py --dosbox` quando disponibile.
 
-- Ultimo commit: O13 (conformità 1.0).
-- Test: 480 verdi, nessuno saltato; ruff pulito; smoke e version verdi.
-- Specifiche: tutte in `docs/spec/`; manuale `docs/manuale-utente.md`;
-  changelog `docs/CHANGELOG.md`.
-- CI: Python 3.11–3.13, lint, test, smoke, rendering, benchmark.
-- Obiettivo raggiunto: release 1.0.
+---
+
+## RIPRESA — checkpoint automazione DOSBox
+
+- Ultimo commit: automazione DOSBox ed E2E visivi.
+- Test: 485 verdi, nessuno saltato; ruff pulito; smoke e version verdi.
+- Specifiche: tutte in `docs/spec/`; manuale `docs/manuale-utente.md`.
+- E2E: `docs/e2e/` con 8 schermate adbx e 2 catture dell'originale.
+- CI: Python 3.11–3.13, lint, test, smoke, rendering, E2E, benchmark.
 

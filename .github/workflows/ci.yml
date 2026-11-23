@@ -32,5 +32,7 @@ jobs:
         run: python -m adbx --smoke
       - name: Rendering canonico
         run: QT_QPA_PLATFORM=offscreen python tools/capture_ui.py --out /tmp/render
+      - name: E2E visuale
+        run: python tools/e2e_visual.py --out /tmp/e2e
       - name: Benchmark rapido
         run: python tools/benchmark.py --records 500

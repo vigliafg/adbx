@@ -15,7 +15,7 @@ TrueType **DejaVu Sans Mono** e motore **SQLite**, su Linux, Windows e macOS.
 I file `.DBF` restano interoperabili.
 
 > **Stato:** release **1.0.0** — conformità alle 25 lezioni del Tutorial,
-> 480 test verdi, nessun test saltato.
+> 485 test verdi, nessun test saltato.
 
 ![Alpha Four main menu](docs/render/01-main-menu.png)
 
@@ -36,6 +36,7 @@ I file `.DBF` restano interoperabili.
 - [Architettura](#architettura)
 - [Struttura del repository](#struttura-del-repository)
 - [Test e qualità](#test-e-qualità)
+- [DOSBox automation e conferma visiva](#dosbox-automation-e-conferma-visiva)
 - [Prestazioni](#prestazioni)
 - [Screenshot](#screenshot)
 - [Documentazione](#documentazione)
@@ -81,7 +82,7 @@ semplici e fedeli. adbx segue questa idea fino in fondo:
 | Script | keystroke, dialog box, menu bar, registrazione, Screen Test, 40+ comandi, variabili, trigger, debugger |
 | Applicazioni | outline, parametri, banner, macro, simulazione, Call-App/GotO-App, password, protezioni |
 | Configurazione | `config.json`, default settings, date europee, 26 driver di stampa, colori per database, documentazione |
-| Qualità | 480 test, 25 lezioni del Tutorial, CI 3.11–3.13, ruff, smoke, benchmark, screenshot canonici |
+| Qualità | 485 test, 25 lezioni del Tutorial, CI 3.11–3.13, ruff, smoke, E2E visuale, benchmark, screenshot canonici |
 
 ### Anteprime
 
@@ -371,7 +372,7 @@ adbx/
 │   ├── screen/       tastiera e input Qt
 │   ├── script/       motore di script
 │   └── shell/        controller e schermate
-├── tests/            480 test, 25 lezioni, performance, packaging
+├── tests/            485 test, 25 lezioni, performance, packaging
 ├── docs/
 │   ├── spec/         specifiche tecniche
 │   ├── reference/    inventario e manuali originali
@@ -406,7 +407,38 @@ La suite include:
 - un hook che **rifiuta i test saltati** (`skip`/`skipif`).
 
 CI GitHub Actions su Python **3.11, 3.12 e 3.13**: lint, test, smoke,
-rendering canonico e benchmark.
+rendering canonico, E2E visuale e benchmark.
+
+## DOSBox automation e conferma visiva
+
+`tools/dosbox_automation.py` pilota **Alpha Four 3.0 originale** in
+[dosbox-automation](https://github.com/dosbox-automation/dosbox-automation)
+tramite la REST API: monta il drive, avvia `A4.EXE`, legge lo schermo come
+testo, digita tasti, attende un testo e cattura frame PNG.
+
+```bash
+# il binario è GPL-2.0 e non è versionato; --download lo mette in cache
+python tools/dosbox_automation.py --download --screenshot /tmp/alpha4.png
+python tools/dosbox_automation.py --probe
+python tools/dosbox_automation.py --keys down,enter --text
+```
+
+Senza display usa `xvfb-run`; il token API è generato a ogni sessione e il
+drive viene estratto dallo zip originale nella cache utente.
+
+`tools/e2e_visual.py` esegue otto scenari end-to-end su adbx — menu, View,
+Browse, editor di script, dialog box, applicazione, anteprima report e
+documentazione — verifica il testo atteso e salva i PNG con hash e statistiche
+in [`docs/e2e/`](docs/e2e/). Con `--dosbox` cattura anche il menu e la View
+records dell'originale, per il confronto visivo.
+
+```bash
+python tools/e2e_visual.py
+python tools/e2e_visual.py --dosbox   # richiede dosbox-automation
+```
+
+La conferma visiva è versionata: [`docs/e2e/README.md`](docs/e2e/README.md)
+mostra affiancate le schermate adbx e DOSBox.
 
 ## Prestazioni
 

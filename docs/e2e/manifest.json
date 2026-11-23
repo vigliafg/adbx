@@ -1,0 +1,94 @@
+{
+  "scenarios": [
+    {
+      "scenario": "01-adbx-main-menu",
+      "file": "adbx/01-adbx-main-menu.png",
+      "expected": "Alpha Four Main Menu",
+      "sha256": "ba89d40281764b4eb5edc76e6ed1be7a357e50e2629ec8b9a217a753b7c42e76",
+      "width": 1320,
+      "height": 817,
+      "sampled_colors": 110
+    },
+    {
+      "scenario": "02-adbx-view-records",
+      "file": "adbx/02-adbx-view-records.png",
+      "expected": "Ada",
+      "sha256": "fabdadecb40d4daea19a4fa8a6e079de25894e1d9f0cbbecd87fd390f969ef61",
+      "width": 1320,
+      "height": 817,
+      "sampled_colors": 52
+    },
+    {
+      "scenario": "03-adbx-browse",
+      "file": "adbx/03-adbx-browse.png",
+      "expected": "CUST_ID",
+      "sha256": "7a7a6cd135c72d25168096aa8f8900a14e270bae43d1efdd5bda90afca0e124f",
+      "width": 1320,
+      "height": 817,
+      "sampled_colors": 68
+    },
+    {
+      "scenario": "04-adbx-script-editor",
+      "file": "adbx/04-adbx-script-editor.png",
+      "expected": "Description:",
+      "sha256": "b07c96129754eb9e013d70880bcdad51c4ceb4182712fb050ba99fb86ba058a2",
+      "width": 1320,
+      "height": 817,
+      "sampled_colors": 58
+    },
+    {
+      "scenario": "05-adbx-dialog",
+      "file": "adbx/05-adbx-dialog.png",
+      "expected": "Name:",
+      "sha256": "364f3cb13cbd9d9fe1a8ccd375c2a970881dfafe8a6ebd009764236cfa8d3ceb",
+      "width": 1320,
+      "height": 817,
+      "sampled_colors": 45
+    },
+    {
+      "scenario": "06-adbx-application",
+      "file": "adbx/06-adbx-application.png",
+      "expected": "E2E MAIN MENU",
+      "sha256": "8e5e20cd1ef4727ecc12a476e7f1c604cd6c689c51efb5e4b48c2c96b432b727",
+      "width": 1320,
+      "height": 817,
+      "sampled_colors": 27
+    },
+    {
+      "scenario": "07-adbx-report-preview",
+      "file": "adbx/07-adbx-report-preview.png",
+      "expected": "Ada",
+      "sha256": "cc1dc6db37110feb0d4124bae5689b7004552247499acfbb1b6699d84aa51323",
+      "width": 1320,
+      "height": 817,
+      "sampled_colors": 47
+    },
+    {
+      "scenario": "08-adbx-documentation",
+      "file": "adbx/08-adbx-documentation.png",
+      "expected": "Structure of AVPATRON",
+      "sha256": "b9a42aa5bfbc90c5dca30e79e45b0044dd902b0b9b6256b1ef1ec07ef9a59c54",
+      "width": 1320,
+      "height": 817,
+      "sampled_colors": 85
+    },
+    {
+      "scenario": "01-alpha4-main-menu",
+      "file": "dosbox/01-alpha4-main-menu.png",
+      "expected": "Alpha Four Main Menu",
+      "sha256": "a990f79f623d21cadf05f22b36f12089dcb17ea22c9dd6788e36b30501902288",
+      "width": 720,
+      "height": 400,
+      "sampled_colors": 5
+    },
+    {
+      "scenario": "02-alpha4-view-records",
+      "file": "dosbox/02-alpha4-view-records.png",
+      "expected": "TAPE_ID",
+      "sha256": "b2c607b5d06fd7eef78773ac493694490faf9dfdd0aa008bc59fedcf1c2efe56",
+      "width": 720,
+      "height": 400,
+      "sampled_colors": 6
+    }
+  ]
+}

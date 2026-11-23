@@ -262,7 +262,26 @@ escape`; una voce `GotO-App` non torna per definizione.
 **Un designer è bloccato.** `Applications → Prevent/allow file alterations`
 mostra i tipi protetti per il database o set.
 
-## 15. Riferimenti
+## 15. Automazione e test visivi
+
+Per gli sviluppatori e per i test di regressione:
+
+```bash
+python tools/e2e_visual.py              # 8 scenari adbx + PNG e manifest
+python tools/dosbox_automation.py --probe
+python tools/dosbox_automation.py --download --screenshot /tmp/alpha4.png
+python tools/e2e_visual.py --dosbox     # richiede dosbox-automation
+```
+
+`dosbox-automation` pilota l'originale via REST API: monta il drive, avvia
+`A4.EXE`, legge il testo dello schermo, invia tasti e cattura frame. Il
+binario GPL-2.0 non è incluso nel repository; `--download` lo mette nella
+cache utente. Senza display viene usato `xvfb-run`.
+
+Le immagini di conferma sono in [`docs/e2e/`](e2e/README.md), con testo
+atteso, dimensioni, colori campionati e SHA-256 in `manifest.json`.
+
+## 16. Riferimenti
 
 - `README.md`: panoramica e stato.
 - `PLAN.md`: architettura e ondate.
