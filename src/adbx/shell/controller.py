@@ -14,6 +14,7 @@ from pathlib import Path
 from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ROW
 from ..data import indexing
 from ..data import rules as field_rules
+from ..data.expressions import Context
 from ..data.indexing import RECORD_NUMBER, SEARCH_PREFIX
 from ..data.labels_engine import render_labels
 from ..data.letters import render_letters
@@ -21,6 +22,20 @@ from ..data.report_engine import render_report
 from ..data.workspace import Database, Workspace, WorkspaceError
 from ..screen.keys import Key, character
 from ..screen.keys import parse as parse_key
+from ..script.engine import (
+    ScriptEngine,
+    ScriptError,
+    ScriptRunner,
+    keys_from_source,
+)
+from ..script.model import (
+    KIND_DIALOG,
+    KIND_KEYSTROKE,
+    KIND_MENU,
+    Script,
+)
+from ..script.store import ScriptStore, script_template
+from ..script.variables import clean_name
 from . import screens
 from .designer import DesignerSession
 from .files import strip_wildcard
@@ -34,6 +49,14 @@ from .records import RecordSession
 from .relational import RelationalSession
 from .reports import ReportDesigner, ReportPreview
 from .rules import RulesSession
+from .script_host import ShellScriptHost
+from .scripts import (
+    DialogDesigner,
+    DialogRuntime,
+    MenuBarDesigner,
+    ScriptDebugSession,
+    ScriptEditor,
+)
 from .searching import SearchSession
 from .sets import SetDesigner, SetSession
 from .state import ShellState, default_root, demo_state
@@ -184,6 +207,38 @@ GLOBAL_ITEMS: tuple[tuple[str, str], ...] = (
     ("Delete duplicate records", "duplicates"),
 )
 
+SCRIPTS_ITEMS: tuple[tuple[str, str], ...] = (
+    ("Modify a script", "modify"),
+    ("create Keystroke script", "create-keystroke"),
+    ("create Dialog script", "create-dialog"),
+    ("create menu baR script", "create-menu"),
+    ("Erase a script", "erase"),
+    ("Play a script", "play"),
+    ("Set script path", "path"),
+    ("display script Variables", "variables"),
+    ("deBug a script", "debug"),
+)
+
+
+def _key_source(key: Key) -> str:
+    """Rappresentazione di un tasto nel testo di uno script registrato."""
+    char = character(key)
+    if char and not key.ctrl and not key.alt:
+        return char
+    parts = []
+    if key.ctrl:
+        parts.append("CTRL")
+    if key.alt:
+        parts.append("ALT")
+    if key.shift:
+        parts.append("SHIFT")
+    parts.append(key.name)
+    return "{" + "-".join(parts) + "}"
+
+
+def _keys_from_source(text: str):
+    return keys_from_source(text)
+
 
 @dataclass
 class Overlay:
@@ -243,6 +298,33 @@ class ShellController:
         self.relational_session: RelationalSession | None = None
         self.transfer_session: TransferSession | None = None
         self.global_session: GlobalSession | None = None
+        self.script_editor: ScriptEditor | None = None
+        self.dialog_designer: DialogDesigner | None = None
+        self.menu_designer: MenuBarDesigner | None = None
+        self.script_debug: ScriptDebugSession | None = None
+        self.dialog_runtime: DialogRuntime | None = None
+        self.script_directory: Path | None = None
+        self.script_engine: ScriptEngine | None = None
+        self.pending_script_kind = ""
+        self.pending_script_name = ""
+        self.pending_script_description = ""
+        self.recording: list[str] | None = None
+        self.recording_name = ""
+        self.recording_source = ""
+        self.script_return_base = "menu"
+        self.script_writes: list[tuple[int, int, str]] = []
+        self.script_beeps = 0
+        self.script_tones: list[tuple[int, int]] = []
+        self.script_pauses = 0
+        self.script_waits: list[tuple] = []
+        self.script_screen_mode = ""
+        self.script_deferred: list[str] = []
+        self.script_mouse: list[tuple] = []
+        self.script_cursor = (1, 1)
+        self.script_display_dialog: Script | None = None
+        self._flushing = False
+        self._opening_script = False
+        self._in_script = False
         self.pending_index_name = ""
         self.pending_locate_text = ""
         self.pending_replace: list[str] = []
@@ -257,6 +339,7 @@ class ShellController:
         self.base = "menu" if self.state.current else "directory"
         self.cursor = self.first = self._first_file_index()
         self._sync_input()
+        self._autostart()
 
     # -- accesso alle schermate -----------------------------------------
     def view(self) -> View:
@@ -294,6 +377,16 @@ class ShellController:
             base = self.transfer_session.view()
         elif self.base == "global" and self.global_session is not None:
             base = self.global_session.view()
+        elif self.base == "scripteditor" and self.script_editor is not None:
+            base = self.script_editor.view()
+        elif self.base == "dialogdesigner" and self.dialog_designer is not None:
+            base = self.dialog_designer.view()
+        elif self.base == "menubardesigner" and self.menu_designer is not None:
+            base = self.menu_designer.view()
+        elif self.base == "scriptdebugger" and self.script_debug is not None:
+            base = self.script_debug.view()
+        elif self.base == "scriptdialog" and self.dialog_runtime is not None:
+            base = self.dialog_runtime.view()
         elif self.base == "directory":
             base = screens.directory(
                 self.state, self.cursor, self.input_text, self.input_cursor,
@@ -304,7 +397,21 @@ class ShellController:
             base = screens.status_screen(self.state, self.theme)
         else:
             base = screens.main_menu(self.state, self.menu_index, self.theme)
+        base = self._script_layer(base)
         return self._with_overlay(base)
+
+    def _script_layer(self, view: View) -> View:
+        """Disegna gli effetti dei comandi di script sullo schermo."""
+        mode = getattr(self, "script_screen_mode", "")
+        writes = list(getattr(self, "script_writes", []))
+        if mode == "off":
+            view.buffer.fill_rect(0, 0, SCREEN_HEIGHT, SCREEN_WIDTH, " ",
+                                  fg=self.theme.text, bg=self.theme.bg)
+        for row, col, text in writes:
+            if 1 <= row <= SCREEN_HEIGHT and 1 <= col <= SCREEN_WIDTH:
+                view.buffer.write(row - 1, col - 1, text[:SCREEN_WIDTH - col + 1],
+                                  fg=self.theme.text, bg=self.theme.bg)
+        return view
 
     def dump(self) -> str:
         return self.view().buffer.dump()
@@ -340,6 +447,7 @@ class ShellController:
                 "labels": "Mail Labels",
                 "letters": "Form Letters",
                 "print": "Print",
+                "scripts": "Scripts",
             }.get(overlay.target, "Desktop Options")
             items = overlay.items or list(DESKTOP_ITEMS)
             return screens.submenu_overlay(base, items, overlay.selected,
@@ -360,6 +468,9 @@ class ShellController:
         if overlay.kind == "history":
             return screens.history_overlay(base, self.state.history,
                                            overlay.selected, self.theme)
+        if overlay.kind == "variables":
+            return screens.variables_overlay(base, overlay.items,
+                                             overlay.selected, self.theme)
         if overlay.kind == "help":
             view, _spans, _positions = screens.help_overlay(
                 base, overlay.topic_id, scroll=overlay.scroll,
@@ -369,6 +480,30 @@ class ShellController:
 
     # -- input -----------------------------------------------------------
     def handle(self, key: Key) -> None:
+        if self.recording is not None:
+            if key.alt and key.name == "F3":
+                self._stop_recording()
+                return
+            self.recording.append(_key_source(key))
+        if key.ctrl and key.name.startswith("F"):
+            try:
+                number = int(key.name[1:])
+            except ValueError:
+                number = 0
+            if 1 <= number <= 10 and self._play_hot_key(number):
+                return
+        if key.alt and key.name == "F1":
+            self._quick_record()
+            return
+        if key.alt and key.name == "F2":
+            self._play_script("UNTITLED")
+            return
+        if key.alt and key.name == "F3":
+            self._open_scripts_menu()
+            return
+        if key.alt and key.name == "F4":
+            self._script_choose("play-script", "Play a script")
+            return
         if key.alt and key.name == "F10":
             self._to_main_menu()
             return
@@ -409,6 +544,16 @@ class ShellController:
             self._handle_transfer_session(key)
         elif self.base == "global":
             self._handle_global_session(key)
+        elif self.base == "scripteditor":
+            self._handle_script_editor(key)
+        elif self.base == "dialogdesigner":
+            self._handle_dialog_designer(key)
+        elif self.base == "menubardesigner":
+            self._handle_menu_designer(key)
+        elif self.base == "scriptdebugger":
+            self._handle_script_debug(key)
+        elif self.base == "scriptdialog":
+            self._handle_dialog_runtime(key)
         elif self.base == "directory":
             self._handle_directory(key)
         elif self.base == "structure":
@@ -672,6 +817,8 @@ class ShellController:
             self._prompt_unlock(database)
         elif current.records is None:
             self._notice(f"Opened {current.name} (record count unavailable).")
+        if not database.locked:
+            self._play_open_script(database.name)
 
     def _open_database(self, path: Path) -> Database | None:
         self.active_set = None
@@ -840,13 +987,17 @@ class ShellController:
             return
         self.records = RecordSession(self.database, mode, self.theme,
                                      clipboard=self.clipboard,
-                                     show_deleted=show_deleted, form=form)
+                                     show_deleted=show_deleted, form=form,
+                                     event_hook=self._record_event)
+        self._apply_custom_menu(self.records)
         self.base = "records"
         self.overlay = None
 
     def _handle_records(self, key: Key) -> None:
         session = self.records
         assert session is not None
+        if self._custom_menu_action(key):
+            return
         if key.name == "F1" and not key.alt:
             self._open_help(session.help_topic)
             return
@@ -924,6 +1075,7 @@ class ShellController:
         self.menu_index = 0
         self.overlay = None
         self._sync_input()
+        self._play_open_script(database.name)
 
     # -- prompt e conferme ----------------------------------------------
     def _prompt_create(self) -> None:
@@ -951,6 +1103,23 @@ class ShellController:
         assert overlay is not None
         text = overlay.input_text.strip()
         action = overlay.action
+        if action.startswith("script-name:"):
+            kind = action.split(":", 1)[1]
+            self._script_name_entered(kind, text)
+            return
+        if action.startswith("script-desc:"):
+            _prefix, kind, name = action.split(":", 2)
+            self._script_create(kind, name, text)
+            return
+        if action == "script-path":
+            self._set_script_path(text)
+            return
+        if action.startswith("variable-edit:"):
+            variable = action.split(":", 1)[1]
+            self._script_engine().set_variable(variable, text)
+            self.overlay = None
+            self._notice(f"{variable} set.")
+            return
         if action == "create":
             self._open_designer(None, text)
             return
@@ -1041,6 +1210,24 @@ class ShellController:
         assert overlay is not None
         action = overlay.action
         self.overlay = None
+        if action.startswith("delete-script:"):
+            name = action.split(":", 1)[1]
+            try:
+                self._script_store().delete(name)
+            except ScriptError as exc:
+                self._notice(str(exc))
+                return
+            self._notice(f"Script {name} erased.")
+            return
+        if action.startswith("script-overwrite:"):
+            _prefix, kind, name = action.split(":", 2)
+            self.pending_script_kind = kind
+            self.pending_script_name = name
+            self.overlay = Overlay(
+                "prompt", text="Description",
+                action=f"script-desc:{kind}:{name}",
+                action_title="Script Description")
+            return
         if action.startswith("delete-index:"):
             name = action.split(":", 1)[1]
             if self.database is not None:
@@ -1141,6 +1328,582 @@ class ShellController:
                 self._sync_input()
             self._notice(f"Database {name} erased.")
 
+    # -- script ----------------------------------------------------------
+    def _script_store(self) -> ScriptStore:
+        if self.script_directory is None:
+            root = (self.workspace.directory if self.workspace is not None
+                    else self.state.root)
+            configured = ""
+            if self.workspace is not None:
+                configured = self.workspace.setting("script_path", "")
+            self.script_directory = (Path(configured).expanduser()
+                                     if configured else
+                                     Path(root) / "objects" / "scripts")
+        return ScriptStore(self.script_directory)
+
+    def _script_engine(self) -> ScriptEngine:
+        if self.script_engine is None:
+            self.script_engine = ScriptEngine(self._script_store(),
+                                              ShellScriptHost(self))
+            engine = self.script_engine
+            engine.variables.set("%SYS_SCRIPT_PATH",
+                                 str(self._script_store().directory))
+            engine.variables.set("%SYS_VIEW_MODE",
+                                 "B" if self.records is not None
+                                 and self.records.mode == "browse" else "V")
+            engine.variables.set("%SYS_TOOLS", "")
+        return self.script_engine
+
+    def _script_variables(self):
+        return self._script_engine().variables
+
+    def _open_scripts_menu(self) -> None:
+        if self.base not in ("scripteditor", "dialogdesigner",
+                             "menubardesigner", "scriptdebugger",
+                             "scriptdialog"):
+            self.script_return_base = self.base
+        self.overlay = Overlay("submenu", items=list(SCRIPTS_ITEMS),
+                               target="scripts")
+
+    def _script_action(self, action: str) -> None:
+        if action == "modify":
+            self._script_choose("modify-script", "Modify a script")
+            return
+        if action.startswith("create-"):
+            kind = {"create-keystroke": KIND_KEYSTROKE,
+                    "create-dialog": KIND_DIALOG,
+                    "create-menu": KIND_MENU}.get(action, KIND_KEYSTROKE)
+            title = {"keystroke": "Keystroke",
+                     "dialog": "Dialog Box",
+                     "menu": "Menu Bar"}[kind]
+            self.overlay = Overlay(
+                "prompt", text=f"Enter a name for the {title} script",
+                action=f"script-name:{kind}", action_title="New Script")
+            return
+        if action == "erase":
+            self._script_choose("erase-script", "Erase a script")
+            return
+        if action == "play":
+            self._script_choose("play-script", "Play a script")
+            return
+        if action == "path":
+            self.overlay = Overlay(
+                "prompt", text="Script path",
+                action="script-path", action_title="Set Script Path",
+                input_text=str(self._script_store().directory),
+                input_cursor=len(str(self._script_store().directory)))
+            return
+        if action == "variables":
+            self.overlay = Overlay(
+                "variables", items=self._script_variables().items(),
+                selected=0)
+            return
+        if action == "debug":
+            self._script_choose("debug-script", "Debug a script")
+            return
+
+    def _script_choose(self, action: str, title: str,
+                       *, playable_only: bool | None = None) -> None:
+        store = self._script_store()
+        names = store.names()
+        if playable_only:
+            names = [name for name in names
+                     if (script := store.get(name, missing_ok=True))
+                     and script.playable]
+        if not names:
+            self._notice("There are no scripts in the script path.")
+            return
+        items = []
+        for name in names:
+            script = store.get(name, missing_ok=True)
+            if script is None:
+                continue
+            items.append((f"{name:<8} {script.kind_label:<10} "
+                          f"{script.description}", name))
+        self.overlay = Overlay("choose", text=title, items=items,
+                               action=action)
+
+    def _script_name_entered(self, kind: str, text: str) -> None:
+        try:
+            name = clean_name(text)
+        except ScriptError:
+            self.overlay = None
+            self._notice("Script names have 1-8 letters, digits or _.")
+            return
+        store = self._script_store()
+        if store.exists_name(name):
+            self.overlay = Overlay(
+                "confirm", text=f"Overwrite existing script {name}?",
+                action=f"script-overwrite:{kind}:{name}")
+            return
+        self.pending_script_kind = kind
+        self.pending_script_name = name
+        self.overlay = Overlay(
+            "prompt", text="Description",
+            action=f"script-desc:{kind}:{name}",
+            action_title="Script Description")
+
+    def _script_create(self, kind: str, name: str, description: str) -> None:
+        self.overlay = None
+        try:
+            script = script_template(name, kind)
+            script.description = description[:80]
+            self._script_store().save(script)
+        except ScriptError as exc:
+            self._notice(str(exc))
+            return
+        self._open_script(script.name)
+
+    def _open_script(self, name: str) -> None:
+        try:
+            script = self._script_store().get(name)
+        except ScriptError as exc:
+            self._notice(str(exc))
+            return
+        assert script is not None
+        self.overlay = None
+        self.script_return_base = (self.base if self.base not in
+                                   ("scripteditor", "dialogdesigner",
+                                    "menubardesigner", "scriptdebugger")
+                                   else self.script_return_base)
+        if script.kind == KIND_DIALOG:
+            self.dialog_designer = DialogDesigner(self._script_store(),
+                                                  script, self.theme)
+            self.base = "dialogdesigner"
+        elif script.kind == KIND_MENU:
+            self.menu_designer = MenuBarDesigner(self._script_store(),
+                                                 script, self.theme)
+            self.base = "menubardesigner"
+        else:
+            screen_lines = self.view().buffer.to_lines()
+            self.script_editor = ScriptEditor(self._script_store(), script,
+                                              self.theme,
+                                              capture_lines=screen_lines)
+            self.base = "scripteditor"
+
+    def _handle_script_editor(self, key: Key) -> None:
+        session = self.script_editor
+        assert session is not None
+        if key.name == "F1" and not key.alt:
+            self._open_help(session.help_topic)
+            return
+        session.handle(key)
+        if session.learn_request or session.append_request:
+            append = session.append_request
+            script = session.script
+            script.source = session.source
+            self._begin_learning(script, append=append)
+            return
+        if session.saved or session.close:
+            self._finish_script_session()
+            if session.status:
+                self._notice(session.status)
+
+    def _handle_dialog_designer(self, key: Key) -> None:
+        session = self.dialog_designer
+        assert session is not None
+        if key.name == "F1" and not key.alt:
+            self._open_help(session.help_topic)
+            return
+        session.handle(key)
+        if session.saved or session.close:
+            self._finish_script_session()
+            if session.status:
+                self._notice(session.status)
+
+    def _handle_menu_designer(self, key: Key) -> None:
+        session = self.menu_designer
+        assert session is not None
+        if key.name == "F1" and not key.alt:
+            self._open_help(session.help_topic)
+            return
+        session.handle(key)
+        if session.saved or session.close:
+            self._finish_script_session()
+            if session.status:
+                self._notice(session.status)
+
+    def _open_script_debug(self, name: str) -> None:
+        try:
+            script = self._script_store().get(name)
+        except ScriptError as exc:
+            self._notice(str(exc))
+            return
+        if script is None:
+            self._notice(f"Script {name} not found.")
+            return
+        self.overlay = None
+        engine = self._script_engine()
+        engine.debug_on = False
+        self.script_return_base = (self.base if self.base in
+                                   ("menu", "records") else "menu")
+        self.script_debug = ScriptDebugSession(engine, script, self.theme)
+        self.base = "scriptdebugger"
+
+    def _handle_script_debug(self, key: Key) -> None:
+        session = self.script_debug
+        assert session is not None
+        if key.name == "F1" and not key.alt:
+            self._open_help(session.help_topic)
+            return
+        session.handle(key)
+        if session.close:
+            self.script_debug = None
+            self.script_engine.debug_on = False
+            self.base = (self.script_return_base
+                         if self.script_return_base in
+                         ("menu", "records") else "menu")
+            if session.status:
+                self._notice(session.status)
+
+    def _handle_dialog_runtime(self, key: Key) -> None:
+        session = self.dialog_runtime
+        assert session is not None
+        if key.name == "F1":
+            self._open_help(session.help_topic)
+            return
+        session.handle(key)
+        if session.action_request or session.close:
+            action = session.action_request
+            self.dialog_runtime = None
+            engine = self._script_engine()
+            for variable, value in session.values.items():
+                engine.variables.set(variable, value)
+            self.base = (self.script_return_base
+                         if self.script_return_base in
+                         ("menu", "records") else "menu")
+            if action:
+                self._play_inline(action)
+
+    def _finish_script_session(self) -> None:
+        self.script_editor = None
+        self.dialog_designer = None
+        self.menu_designer = None
+        self.base = (self.script_return_base
+                     if self.script_return_base in ("menu", "records")
+                     else "menu")
+
+    def _set_script_path(self, text: str) -> None:
+        path = Path(text).expanduser()
+        if not path.is_absolute():
+            path = self.state.root / path
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            self.overlay = None
+            self._notice(f"Cannot use script path: {exc}")
+            return
+        self.script_directory = path
+        if self.workspace is not None:
+            self.workspace.set_setting("script_path", str(path))
+        if self.script_engine is not None:
+            self.script_engine.store = ScriptStore(path)
+            self.script_engine.variables.set("%SYS_SCRIPT_PATH", str(path))
+        self.overlay = None
+        self._notice(f"Script path set to {path}.")
+
+    def _play_script(self, name: str) -> bool:
+        try:
+            script = self._script_store().get(name, missing_ok=True)
+        except ScriptError as exc:
+            self._notice(str(exc))
+            return False
+        if script is None:
+            self._notice(f"Script {name} not found.")
+            return False
+        if not script.playable:
+            self._notice("Menu bar scripts are assigned to layouts, "
+                         "not played directly.")
+            return False
+        self.overlay = None
+        if script.kind == KIND_DIALOG:
+            self.dialog_runtime = DialogRuntime(script, self.theme)
+            self.script_return_base = (self.base if self.base in
+                                       ("menu", "records") else "menu")
+            self.base = "scriptdialog"
+            return True
+        engine = self._script_engine()
+        engine.variables.set("%SYS_VIEW_MODE",
+                             "B" if self.records is not None
+                             and self.records.mode == "browse" else "V")
+        self._in_script = True
+        try:
+            ok = engine.run(script)
+        except (ScriptError, OSError) as exc:
+            self._in_script = False
+            self._notice(f"Script: {exc}")
+            return False
+        finally:
+            self._in_script = False
+        self._flush_deferred()
+        if ok:
+            self._notice(f"Script {script.name} finished.")
+        return ok
+
+    def _play_inline(self, source: str) -> bool:
+        engine = self._script_engine()
+        self._in_script = True
+        try:
+            runner = ScriptRunner(engine, source, name="<inline>")
+            runner.run()
+        except ScriptError as exc:
+            self._notice(f"Script: {exc}")
+            return False
+        finally:
+            self._in_script = False
+        self._flush_deferred()
+        return True
+
+    def _play_hot_key(self, number: int) -> bool:
+        engine = self._script_engine()
+        variable = f"%SYS_CTRLF{number}"
+        name = engine.variables.get(variable) or f"CTRLF{number}"
+        if not self._script_store().exists_name(name):
+            return False
+        return self._play_script(name)
+
+    def _quick_record(self) -> None:
+        if self.recording is not None:
+            return
+        script = script_template("UNTITLED", KIND_KEYSTROKE)
+        self._begin_learning(script, append=False)
+        self._notice("Recording UNTITLED. Press ALT-F3 to stop.")
+
+    def _begin_learning(self, script: Script, *, append: bool) -> None:
+        self.recording_name = script.name
+        self.recording_source = script.source if append else ""
+        self.recording = []
+        self._recording_script = script
+        self.script_editor = None
+        self.dialog_designer = None
+        self.menu_designer = None
+        self.base = (self.script_return_base
+                     if self.script_return_base in ("menu", "records")
+                     else "menu")
+        self.overlay = None
+
+    def _stop_recording(self) -> None:
+        if self.recording is None:
+            return
+        script = getattr(self, "_recording_script", None)
+        source = self.recording_source + "".join(self.recording)
+        self.recording = None
+        self._recording_script = None
+        if script is None:
+            return
+        script.source = source[:3000]
+        try:
+            self._script_store().save(script)
+        except ScriptError as exc:
+            self._notice(str(exc))
+            return
+        self._notice(f"Script {script.name} recorded "
+                     f"({len(script.source)} characters).")
+
+    def _autostart(self) -> None:
+        try:
+            script = self._script_store().get("AUTOEXEC", missing_ok=True)
+        except (ScriptError, OSError):
+            return
+        if script is not None and script.kind == KIND_KEYSTROKE:
+            if self.base in ("menu", "directory"):
+                self._play_script("AUTOEXEC")
+
+    def _play_open_script(self, name: str) -> None:
+        if getattr(self, "_opening_script", False):
+            return
+        script_name = name.strip().upper()[:7] + "!"
+        try:
+            if not self._script_store().exists_name(script_name):
+                return
+        except ScriptError:
+            return
+        self._opening_script = True
+        try:
+            self._play_script(script_name)
+        finally:
+            self._opening_script = False
+
+    # -- trigger ---------------------------------------------------------
+    def _record_event(self, event: str, **context) -> None:
+        if getattr(self, "_firing_trigger", False):
+            return
+        engine = self.script_engine
+        if engine is None:
+            return
+        if context.get("field"):
+            engine.variables.set("%SYS_FIELD_NAME", context["field"])
+        if context.get("region"):
+            engine.variables.set("%SYS_REGION_NAME", context["region"])
+        if context.get("save_mode"):
+            engine.variables.set("%SYS_SAVE_MODE", context["save_mode"])
+        if context.get("count") is not None:
+            engine.variables.set("%SYS_SEARCH_COUNT", str(context["count"]))
+        self._fire_script_trigger(event)
+
+    def _fire_script_trigger(self, event: str) -> bool:
+        engine = self.script_engine
+        if engine is None or not engine.triggers.get(event):
+            return False
+        self._firing_trigger = True
+        try:
+            fired = engine.fire(event)
+        finally:
+            self._firing_trigger = False
+        self._flush_deferred()
+        return fired
+
+    def _flush_deferred(self) -> None:
+        deferred = list(getattr(self, "script_deferred", []))
+        if not deferred or getattr(self, "_flushing", False):
+            return
+        self.script_deferred.clear()
+        self._flushing = True
+        try:
+            for chunk in deferred:
+                for key in _keys_from_source(chunk):
+                    self.handle(key)
+        finally:
+            self._flushing = False
+
+    # -- primitive dell'host --------------------------------------------
+    def script_prompt(self, label: str, length: int, default: str = "",
+                      *, secret: bool = False) -> str | None:
+        try:
+            from PyQt6.QtWidgets import QApplication, QInputDialog
+        except ImportError:
+            return default
+        if QApplication.instance() is None:
+            return default
+        value, accepted = QInputDialog.getText(
+            None, "adbx", label,
+            QInputDialog.EchoMode.Password if secret
+            else QInputDialog.EchoMode.Normal, default)
+        return value[:length] if accepted else None
+
+    def script_show_dialog(self, name: str, *,
+                           modal: bool = True) -> dict[str, str] | None:
+        try:
+            script = self._script_store().get(name, missing_ok=True)
+        except ScriptError:
+            return None
+        if script is None or script.kind != KIND_DIALOG:
+            self._notice(f"Dialog box {name} not found.")
+            return None
+        self.script_display_dialog = script
+        values = {}
+        dialog = script.dialog
+        if dialog is not None:
+            for control in dialog.controls:
+                if control.variable:
+                    values[control.variable] = control.default
+        return values
+
+    def script_context(self) -> Context | None:
+        database = self.database
+        if self.set_records is not None:
+            primary = self.set_records.primary
+            values: dict[str, str] = {}
+            for (name, field), value in self.set_records.draft.items():
+                if name == primary.name:
+                    values[field] = value
+            if not values and self.set_records.current_seq is not None:
+                values = primary.read(self.set_records.current_seq)
+            return Context(fields=primary.fields, values=values,
+                           pattern=primary.workspace.pattern_mode,
+                           seq=self.set_records.current_seq or 0,
+                           count=primary.count())
+        if database is None:
+            return None
+        values = {}
+        seq = 0
+        if self.records is not None:
+            values = self.records._values()
+            seq = self.records.current_seq or 0
+        return Context(fields=database.fields, values=values,
+                       pattern=database.workspace.pattern_mode,
+                       seq=seq, count=database.count())
+
+    def script_prompt_value(self, variable: str) -> str:
+        return self._script_variables().get(variable)
+
+    def script_main_menu(self) -> None:
+        self.script_screen_mode = "on"
+        self.script_writes.clear()
+        self._to_main_menu()
+
+    def script_tool_end(self) -> None:
+        if self.records is not None:
+            self.base = "records"
+        else:
+            self.base = "menu"
+
+    def script_end_app(self) -> None:
+        self.base = "menu"
+        self._notice("Application ended.")
+
+    def script_debug_pause(self, runner, token) -> None:
+        row, col = self.script_cursor
+        self.script_cursor = (row, col)
+
+    def script_error(self, message: str) -> None:
+        if not getattr(self, "_in_script", False):
+            self._notice(f"Script: {message}")
+        else:
+            self._notice(f"Script: {message}")
+
+    def script_set_screen_mode(self, mode: str) -> None:
+        self.script_screen_mode = mode
+        if mode == "on":
+            self.script_writes.clear()
+
+    def _open_tools(self) -> None:
+        engine = self._script_engine()
+        preferred = engine.variables.get("%SYS_TOOLS")
+        if preferred:
+            self._play_script(preferred)
+            return
+        store = self._script_store()
+        names = [name for name in store.names()
+                 if (script := store.get(name, missing_ok=True))
+                 and script.playable]
+        if not names:
+            self._notice("There are no Tools scripts in the script path.")
+            return
+        items = [(name, name) for name in names]
+        self.overlay = Overlay("choose", text="Tools",
+                               items=items, action="play-tools")
+
+    def _apply_custom_menu(self, session: RecordSession) -> None:
+        form = getattr(session, "form", None)
+        name = getattr(form, "custom_menu", "") if form is not None else ""
+        if not name:
+            session.menu_items = None
+            return
+        try:
+            script = self._script_store().get(name, missing_ok=True)
+        except ScriptError:
+            script = None
+        if script is None or script.kind != KIND_MENU or script.menu is None:
+            session.menu_items = None
+            return
+        session.menu_items = list(script.menu.items)
+
+    def _custom_menu_action(self, key: Key) -> bool:
+        session = self.records
+        if session is None or not getattr(session, "menu_items", None):
+            return False
+        for item in session.menu_items:
+            try:
+                mapped = parse_key(item.key)
+            except ValueError:
+                continue
+            if mapped == key:
+                if item.action:
+                    self._play_inline(item.action)
+                return True
+        return False
+
     # -- dispatch dei sottomenu -----------------------------------------
     def _activate_overlay_item(self) -> None:
         overlay = self.overlay
@@ -1184,6 +1947,8 @@ class ShellController:
             self._letters_action(action)
         elif overlay.target == "print":
             self._print_action(action)
+        elif overlay.target == "scripts":
+            self._script_action(action)
 
     def _design_action(self, action: str) -> None:
         if action == "create":
@@ -1579,6 +2344,7 @@ class ShellController:
         self.base = "menu"
         self.overlay = None
         self._sync_input()
+        self._play_open_script(definition.name)
         return True
 
     def _choose_desktop(self, action: str) -> None:
@@ -2216,6 +2982,8 @@ class ShellController:
             self.overlay = Overlay(
                 "prompt", text="Search for", action="replace-find",
                 action_title="Search and Replace")
+        elif request == "tools":
+            self._open_tools()
 
     def _open_fields(self, title: str, chosen: list[str],
                      action: str) -> None:
@@ -2249,6 +3017,19 @@ class ShellController:
         action = overlay.action
         self.overlay = None
         database = self.database
+        if action == "modify-script":
+            self._open_script(value)
+            return
+        if action in ("play-script", "play-tools"):
+            self._play_script(value)
+            return
+        if action == "erase-script":
+            self.overlay = Overlay("confirm", text=f"Erase script {value}?",
+                                   action=f"delete-script:{value}")
+            return
+        if action == "debug-script":
+            self._open_script_debug(value)
+            return
         if action in ("open-set", "modify-set", "switch"):
             name = value
             if value.startswith("SET:"):
@@ -2634,6 +3415,28 @@ class ShellController:
             elif name == "ESC":
                 self.overlay = None
             return
+        if overlay.kind == "variables":
+            if name == "UP":
+                overlay.selected = max(0, overlay.selected - 1)
+            elif name == "DOWN":
+                overlay.selected = min(max(0, len(overlay.items) - 1),
+                                       overlay.selected + 1)
+            elif name == "ENTER" and overlay.items:
+                variable = overlay.items[overlay.selected][0]
+                value = overlay.items[overlay.selected][1]
+                self.overlay = Overlay(
+                    "prompt", text=f"{variable} = {value}",
+                    action=f"variable-edit:{variable}",
+                    action_title="Script Variable")
+            elif name == "F4" and overlay.items:
+                variable = overlay.items[overlay.selected][0]
+                self._script_engine().variables.delete(variable)
+                overlay.items = self._script_engine().variables.items()
+                overlay.selected = min(overlay.selected,
+                                       max(0, len(overlay.items) - 1))
+            elif name in ("F10", "ESC"):
+                self.overlay = None
+            return
         if overlay.kind == "help":
             if name == "ESC":
                 self.overlay = None
@@ -2707,6 +3510,16 @@ class ShellController:
         self._open_entry(path)
 
     def _to_main_menu(self) -> None:
+        if self.base in ("scripteditor", "dialogdesigner", "menubardesigner",
+                         "scriptdebugger", "scriptdialog") and self.overlay is None:
+            self.script_editor = None
+            self.dialog_designer = None
+            self.menu_designer = None
+            self.script_debug = None
+            self.dialog_runtime = None
+            self.script_display_dialog = None
+            self.base = "menu"
+            return
         if self.base == "formdesigner" and self.overlay is None:
             self.form_designer = None
             self.base = "menu"
@@ -2805,6 +3618,31 @@ def demo_controller() -> ShellController:
     controller.clipboard = [""]
     controller.pending_path = None
     controller.base = "menu"
+    controller.script_editor = None
+    controller.dialog_designer = None
+    controller.menu_designer = None
+    controller.script_debug = None
+    controller.dialog_runtime = None
+    controller.script_directory = None
+    controller.script_engine = None
+    controller.script_return_base = "menu"
+    controller.recording = None
+    controller.recording_name = ""
+    controller.recording_source = ""
+    controller.script_writes = []
+    controller.script_beeps = 0
+    controller.script_tones = []
+    controller.script_pauses = 0
+    controller.script_waits = []
+    controller.script_screen_mode = ""
+    controller.script_deferred = []
+    controller.script_mouse = []
+    controller.script_cursor = (1, 1)
+    controller.script_display_dialog = None
+    controller._flushing = False
+    controller._opening_script = False
+    controller._in_script = False
+    controller._firing_trigger = False
     return controller
 
 

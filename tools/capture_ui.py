@@ -46,7 +46,21 @@ from adbx.data.rules import FieldRule, LookupTable, PostingRule  # noqa: E402
 from adbx.data.sets import Link, SetDefinition  # noqa: E402
 from adbx.data.workspace import Workspace  # noqa: E402
 from adbx.render.qt_renderer import CellRenderer  # noqa: E402
+from adbx.script import (  # noqa: E402
+    KIND_DIALOG,
+    KIND_KEYSTROKE,
+    KIND_MENU,
+    DialogBox,
+    DialogControl,
+    MenuBarScript,
+    MenuItem,
+    Script,
+    ScriptEngine,
+    ScriptHost,
+    ScriptStore,
+)
 from adbx.shell import screens  # noqa: E402
+from adbx.shell.controller import SCRIPTS_ITEMS  # noqa: E402
 from adbx.shell.designer import DesignerSession  # noqa: E402
 from adbx.shell.forms import FormDesigner  # noqa: E402
 from adbx.shell.global_update import GlobalSession  # noqa: E402
@@ -60,6 +74,12 @@ from adbx.shell.rules import (  # noqa: E402
     LookupTableEditor,
     PostingEditor,
     RulesSession,
+)
+from adbx.shell.scripts import (  # noqa: E402
+    DialogDesigner,
+    MenuBarDesigner,
+    ScriptDebugSession,
+    ScriptEditor,
 )
 from adbx.shell.searching import SearchSession  # noqa: E402
 from adbx.shell.sets import SetDesigner, SetSession  # noqa: E402
@@ -452,6 +472,50 @@ def main(argv: list[str] | None = None) -> int:
         delete_session.stage = "confirm"
         delete_session._load_row()
 
+        script_store = ScriptStore(Path(temporary) / "scripts")
+        editor_script = script_store.save(Script(
+            "OPENDBS", kind=KIND_KEYSTROKE,
+            description="Open the three Alpha Video databases",
+            source='COAVMOVIES{ENTER}COAVPATRON{ENTER}COALPHAVID'))
+        script_editor = ScriptEditor(script_store, editor_script)
+        script_editor.row = 0
+        script_editor.col = min(12, len(script_editor.lines[0]))
+        dialog_script = script_store.save(Script(
+            "HELLO", kind=KIND_DIALOG, description="Greeting",
+            dialog=DialogBox(
+                title="HELLO", row=6, col=30, height=9, width=48,
+                controls=[
+                    DialogControl("Prompt", row=3, col=3, width=20,
+                                  label="Your name:", variable="%NAME"),
+                    DialogControl("Button", row=6, col=10, width=10,
+                                  label="OK", action='{PLAY "GREET"}'),
+                    DialogControl("Display", row=6, col=26, width=16,
+                                  label="", variable="%SYS_DATE")],
+            )))
+        dialog_designer = DialogDesigner(script_store, dialog_script)
+        menu_script = script_store.save(Script(
+            "VIEWBAR", kind=KIND_MENU, description="Movie view menu",
+            menu=MenuBarScript(items=[
+                MenuItem("F1", "Help", "{F1}"),
+                MenuItem("F2", "Renew", '{PLAY "RENEW"}'),
+                MenuItem("F10", "Continue", "{F10}")],
+            )))
+        menu_designer = MenuBarDesigner(script_store, menu_script)
+        variable_view = screens.variables_overlay(
+            menu, [("%SYS_SCRIPT_PATH", str(script_store.directory)),
+                   ("%SYS_VIEW_MODE", "V"), ("%SYS_TRIG_REC_SAVE", "SAVEWHAT"),
+                   ("%NAME", "Wendy Richardson"),
+                   ("%CATEGORY", "CANCELLED")], 0)
+        debug_script = script_store.save(Script(
+            "CANCEL", kind=KIND_KEYSTROKE,
+            description="Cancel a membership",
+            source='C{PUT}CATEGORY{CANCELLED}{F10}{F10}'))
+        debug_session = ScriptDebugSession(
+            ScriptEngine(script_store, ScriptHost()), debug_script)
+        debug_session._step()
+        scripts_menu = screens.submenu_overlay(
+            menu, list(SCRIPTS_ITEMS), 0, title="Scripts")
+
         shots = {
             "01-main-menu": menu,
             "02-directory": directory,
@@ -490,6 +554,12 @@ def main(argv: list[str] | None = None) -> int:
             "36-export-fields": export_session.view(),
             "37-global-update": update_session.view(),
             "38-delete-range": delete_session.view(),
+            "39-scripts-menu": scripts_menu,
+            "40-script-editor": script_editor.view(),
+            "41-dialog-designer": dialog_designer.view(),
+            "42-script-variables": variable_view,
+            "43-script-debugger": debug_session.view(),
+            "44-menu-bar": menu_designer.view(),
         }
         for name, view in shots.items():
             image = renderer.to_image(view.buffer)

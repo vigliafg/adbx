@@ -686,12 +686,51 @@ Formato:
 
 ---
 
-## RIPRESA — checkpoint O9
+### 2026-11-23 — Ondata O10 — Script
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: motore keystroke, registrazione e `Screen Test`, dialog box,
+  menu bar script, comandi del capitolo 18, variabili, `%SYS_*`, trigger,
+  debugger, `AUTOEXEC`, script `nomeDB!`, `CTRL-F1..F10` e `Tools`.
+- File toccati: nuovi `src/adbx/script/` (model, parser, variables, engine,
+  triggers, store), `src/adbx/shell/scripts.py` (editor, dialog designer,
+  menu bar designer, debugger, dialog runtime), `src/adbx/shell/script_host.py`,
+  specifica `docs/spec/12-script.md`, screenshot `39`–`44`; aggiornati
+  `controller.py` (menu ALT-F3, playback, registrazione, variabili, trigger,
+  AUTOEXEC, script di apertura, hot key, Tools, menu bar personalizzato),
+  `records.py` (hook trigger e menu personalizzato), `screens.py` (overlay
+  variabili), `help.py`, `README.md`, `tools/capture_ui.py`; test nuovi
+  `test_script_engine`, `test_scripts_ui`.
+- Scelte:
+  - **Un solo percorso di input**: il playback chiama
+    `ShellController.handle`, come la tastiera reale.
+  - **JSON leggibile** per gli script; `.SCP` è un export/import testuale.
+  - **Tutti i comandi** del cap. 18 sono riconosciuti; `EXEC`, `EXECCLR` e
+    `RPL` falliscono in modo gestibile da `ONERROR` perché adbx non esegue
+    programmi DOS.
+  - **22 trigger** del manuale, con alias per i nomi ambigui dell'OCR;
+    agganci reali su record, field rules, lettere, search/sort e update.
+  - **Dialog runtime** con Prompt/Button/Display; il Button chiude la finestra
+    prima di eseguire l'azione, per evitare rientri nel key handler.
+  - **Screen test** sulle righe visibili; F6 marca l'area corrente.
+- Test: **394 passed**; `uvx ruff check src tests tools` pulito;
+  `./start.sh --smoke` e `--version` verdi.
+- Screenshot: `39-scripts-menu`, `40-script-editor`, `41-dialog-designer`,
+  `42-script-variables`, `43-script-debugger`, `44-menu-bar`.
+- Problemi aperti / deviazioni dichiarate:
+  - `EXEC`/`EXECCLR`, `RPL` e i programmi DOS esterni non sono eseguiti.
+  - Le attese sono cooperative e non sospendono l'event loop Qt.
+  - Lo screen test memorizza il rettangolo ma confronta il testo.
+  - I file di script non sono il formato binario `.SCP` originale.
+- Prossimo passo: O11 — Applicazioni.
 
-- Ultimo commit: O9 (utility e I/O).
-- Test: 338 verdi; ruff pulito; smoke e version verdi.
-- Specifiche: `docs/spec/11-utility-io.md`; screenshot `32`–`38`.
-- Prossimo obiettivo: O10 — keystroke engine, registrazione e `Screen Test`,
-  dialog box, menu bar script, 40 comandi, variabili, `%SYS_*`, 17 trigger,
-  debugger, `AUTOEXEC`, `nomeDB!`, `CTRL-F1..10`, `Tools`; accettazione
-  lezioni 24 e 25.
+---
+
+## RIPRESA — checkpoint O10
+
+- Ultimo commit: O10 (script).
+- Test: 394 verdi; ruff pulito; smoke e version verdi.
+- Specifiche: `docs/spec/12-script.md`; screenshot `39`–`44`.
+- Prossimo obiettivo: O11 — application editor, parametri, banner, macro,
+  simulate, call-app/goto-app, password, prevent/allow.
+

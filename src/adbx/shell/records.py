@@ -39,11 +39,12 @@ MODE_TITLES = {
 MODE_KEYS = {
     "view": [("F1", "Help"), ("F", "Find"), ("L", "Locate"), ("I", "Index"),
              ("R", "Range"), ("S", "Replace"), ("F10", "Continue"),
-             ("F7", "Show deleted"), ("Alt-M", "Memo"), ("Alt-D", "Delete"),
-             ("Alt-U", "Undelete")],
+             ("F7", "Show deleted"), ("T", "Tools"), ("Alt-M", "Memo"),
+             ("Alt-D", "Delete"), ("Alt-U", "Undelete")],
     "browse": [("F1", "Help"), ("F", "Find"), ("L", "Locate"), ("I", "Index"),
                ("R", "Range"), ("F10", "Continue"), ("F7", "Show deleted"),
-               ("Alt-M", "Memo"), ("Alt-D", "Delete"), ("Alt-U", "Undelete")],
+               ("T", "Tools"), ("Alt-M", "Memo"), ("Alt-D", "Delete"),
+               ("Alt-U", "Undelete")],
     "enter": [("F1", "Help"), ("F3", "Choices"), ("F10", "Save"),
               ("ESC", "Cancel"), ("Alt-M", "Memo"), ("Alt-F5", "Copy"),
               ("Alt-F6", "Paste")],
@@ -237,6 +238,8 @@ class RecordSession:
         init=False, default_factory=dict)
     form: object | None = None
     form_page: int = 0
+    event_hook: object | None = None
+    menu_items: list | None = None
     _seqs: list[int] = field(init=False, default_factory=list)
     _browse_rows: list[tuple[int, bool, dict[str, str]]] | None = field(
         init=False, default=None)
@@ -265,6 +268,10 @@ class RecordSession:
                 self._load_record()
         else:
             self.status = "This database has no records."
+        if self.mode == "enter":
+            self._emit("REC_ENTER")
+        elif self.mode == "change":
+            self._emit("REC_CHANGE", seq=self.current_seq)
 
     # -- stato -----------------------------------------------------------
     @property
@@ -280,6 +287,12 @@ class RecordSession:
     @property
     def record_count(self) -> int:
         return len(self._seqs)
+
+    @property
+    def menu_entries(self) -> list[tuple[str, str]]:
+        if self.menu_items:
+            return [(item.key, item.label) for item in self.menu_items]
+        return MODE_KEYS[self.mode]
 
     @property
     def page_rows(self) -> int:
@@ -535,6 +548,11 @@ class RecordSession:
         seq = self.current_seq
         return self.database.read(seq) if seq is not None else {}
 
+    def _emit(self, event: str, **context) -> None:
+        hook = self.event_hook
+        if hook is not None:
+            hook(event, **context)
+
     # -- campi -----------------------------------------------------------
     def _field(self) -> Field | None:
         fields = self._navigation_fields()
@@ -566,6 +584,7 @@ class RecordSession:
                           if position >= len(self.edit_text)
                           or not self.edit_text[position].strip()), None)
             self.edit_cursor = empty if empty is not None else len(self.edit_text)
+        self._emit("FIELD_ENTER", field=field.name)
 
     def _commit_field(self) -> bool:
         field = self._field()
@@ -619,6 +638,7 @@ class RecordSession:
         else:
             self.edit_text = format_value(field, value)
         self.edit_cursor = min(self.edit_cursor, len(self.edit_text))
+        self._emit("FIELD_VALID", field=field.name)
         if rule is not None:
             error = field_rules.validation_error(rule, self.database,
                                                  self.draft)
@@ -634,6 +654,7 @@ class RecordSession:
                     self.status = error
                     return False
         self._recalculate()
+        self._emit("FIELD_EXIT", field=field.name)
         return True
 
     def _move_field(self, delta: int, *, wrap: bool = False) -> None:
@@ -899,6 +920,8 @@ class RecordSession:
         self._persist()
         self.dirty = False
         self._reload(keep=self.seq)
+        self._emit("REC_SAVE", save_mode="E" if self.mode == "enter" else "C",
+                   seq=self.seq)
         return True
 
     def _persist(self) -> None:
@@ -966,6 +989,7 @@ class RecordSession:
             return
         self.database.delete(seq)
         self._persist()
+        self._emit("REC_DEL", seq=seq)
         self.status = "Record marked for deletion. Use Show deleted and Alt-U to recall it."
         if not self.show_deleted:
             self._reload()
@@ -985,6 +1009,7 @@ class RecordSession:
             return
         self.database.undelete(seq)
         self._persist()
+        self._emit("REC_UNDEL", seq=seq)
         self.status = "Record recalled."
         self._reload(keep=seq)
 
@@ -1357,6 +1382,9 @@ class RecordSession:
                 return
             if name == "S" and self.mode == "view":
                 self.request = "replace"
+                return
+            if name == "T":
+                self.request = "tools"
                 return
         if self.mode == "browse":
             self._handle_browse(key)

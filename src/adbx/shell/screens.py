@@ -506,6 +506,38 @@ def choose_overlay(base: View, title: str, items: list[tuple[str, str]],
     return overlay_view(base, panel, row, col, regions, theme)
 
 
+def variables_overlay(base: View, items: list[tuple[str, str]],
+                      selected: int, theme: Theme = NEWPORT) -> View:
+    """Elenco delle variabili di script, con valore corrente."""
+    width = 90
+    height = min(STATUS_ROW - 3, max(7, len(items) + 5))
+    panel = window(width, height, "Script Variables", theme)
+    regions: list[Region] = []
+    visible = height - 4
+    top = max(0, min(selected - visible + 1, max(0, len(items) - visible)))
+    for offset in range(visible):
+        index = top + offset
+        if index >= len(items):
+            break
+        name, value = items[index]
+        row = 2 + offset
+        text = f"{name:<26} {value}"
+        if index == selected:
+            panel.fill_rect(row, 1, 1, width - 2, " ",
+                            fg=theme.selected_fg, bg=theme.selected_bg)
+            panel.write(row, 2, text, fg=theme.selected_fg,
+                        bg=theme.selected_bg)
+        else:
+            panel.write(row, 2, text, fg=theme.window_fg, bg=theme.window_bg)
+        regions.append(Region(row, 1, 1, width - 2, f"variables:{index}"))
+    panel.write(height - 2, 2,
+                "ENTER edit   F4 erase   ESC close",
+                fg=theme.muted, bg=theme.window_bg)
+    row = max(2, (STATUS_ROW - height) // 2)
+    col = (SCREEN_WIDTH - width) // 2
+    return overlay_view(base, panel, row, col, regions, theme)
+
+
 def fields_overlay(base: View, fields: list[str], chosen: list[str],
                    cursor: int, title: str, theme: Theme = NEWPORT) -> View:
     """Field Selection del Locate/Search and replace."""

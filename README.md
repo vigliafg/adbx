@@ -9,7 +9,7 @@ finestra con una griglia di caratteri scalabile (132×43, font TrueType), su un 
 su Linux, Windows e macOS.
 
 - Licenza: MIT
-- Stato: **O9 completata** — utility sui dati, comandi relazionali e import/export in dieci formati
+- Stato: **O10 completata** — script, dialog box, menu bar, trigger e debugger
 - Piano completo: [`PLAN.md`](PLAN.md)
 - Diario di implementazione: [`DIARIO.md`](DIARIO.md)
 - Inventario funzionale estratto dai manuali:
@@ -27,6 +27,7 @@ su Linux, Windows e macOS.
   report engine [`docs/spec/09-report.md`](docs/spec/09-report.md),
   etichette e lettere [`docs/spec/10-etichette-lettere.md`](docs/spec/10-etichette-lettere.md),
   utility e I/O [`docs/spec/11-utility-io.md`](docs/spec/11-utility-io.md),
+  script [`docs/spec/12-script.md`](docs/spec/12-script.md),
   ambiente DOS di riferimento
   [`docs/spec/03-ambiente-dos-riferimento.md`](docs/spec/03-ambiente-dos-riferimento.md)
 - Schermate: [`docs/render/`](docs/render/)
@@ -136,6 +137,21 @@ fisse, DIF, SYLK, Lotus WKS/WK1, WordPerfect merge e MultiMate. Ogni formato
 ha una prova di andata e ritorno; le impostazioni ASCII (separatore,
 virgolette, intestazione, spazi finali) e la Field Adjust permettono di
 correggere tipi e lunghezze prima di creare il database.
+
+Con **O10** il prodotto diventa programmabile. `ALT-F3` apre il menu degli
+script, `ALT-F4` suona uno script, `ALT-F1` registra `UNTITLED` e `ALT-F2` lo
+riproduce; nell'editor `F3`/`F4` registrano da capo o in coda e `F5`/`F6`
+definiscono il *Screen Test*. Il motore esegue i comandi del capitolo 18 —
+`IF`, `CASE`, `LOOP`, `GOTO`, `SET`, `PLAY`, `PROMPT`, `READ`, `WRITE`,
+`WAIT*`, `XLOOKUP*`, `TRIGKEYS`, `ONKEY`, `ONERROR`, `ONMAIN`, i comandi
+mouse, suono e schermo — e inietta i tasti nello stesso gestore dell'input
+reale. Le variabili `%NOME` e `%SYS_*` hanno i limiti del manuale; i 22 eventi
+di trigger si attivano con `%SYS_TRIG_*`; `AUTOEXEC`, gli script
+`nomeDB!`, `CTRL-F1..F10` e il comando `Tools` sono agganciati al guscio.
+Il designer dei dialog box gestisce Prompt, Button e Display; quello dei menu
+bar sostituisce il menu di View/Browse; il debugger avanza un token con `F10`.
+Il dialog runtime esegue le azioni dei Button e riporta i valori nelle
+variabili.
 
 ## Riferimenti
 

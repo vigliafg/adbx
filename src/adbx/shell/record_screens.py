@@ -5,7 +5,7 @@ from __future__ import annotations
 from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ROW, Cell, CellBuffer
 from ..data.fields import format_value
 from . import screens
-from .records import MODE_KEYS, RecordSession
+from .records import RecordSession
 from .theme import NEWPORT, Theme
 from .widgets import (
     Region,
@@ -74,7 +74,7 @@ def form_screen(session: RecordSession, theme: Theme = NEWPORT) -> View:
     hint = _form_hint(session)
     draw_help_line(buffer, theme,
                    session.status or _form_field_hint(session) or hint)
-    regions.extend(draw_menu_line(buffer, theme, MODE_KEYS[session.mode]))
+    regions.extend(draw_menu_line(buffer, theme, session.menu_entries))
     return View(buffer, regions)
 
 
@@ -189,7 +189,7 @@ def browse_screen(session: RecordSession, theme: Theme = NEWPORT) -> View:
         buffer.write(BROWSE_HEADER_ROW, SCREEN_WIDTH - 1, ">",
                      fg=theme.accent, bg=theme.bg, bold=True)
     draw_help_line(buffer, theme, session.status or _form_hint(session))
-    regions.extend(draw_menu_line(buffer, theme, MODE_KEYS[session.mode]))
+    regions.extend(draw_menu_line(buffer, theme, session.menu_entries))
     return View(buffer, regions)
 
 
@@ -405,5 +405,5 @@ def custom_form_screen(session: RecordSession,
                    session.status or _form_field_hint(session) or hint)
     regions = list(getattr(session, "_form_regions", []))
     session._form_regions = []
-    regions.extend(draw_menu_line(buffer, theme, MODE_KEYS[session.mode]))
+    regions.extend(draw_menu_line(buffer, theme, session.menu_entries))
     return View(buffer, regions)
