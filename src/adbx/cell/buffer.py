@@ -29,15 +29,18 @@ class Cell:
     bg: int = DEFAULT_BG
     blink: bool = False
     bold: bool = False
+    underline: bool = False
 
     def styled(self, *, fg: int | None = None, bg: int | None = None,
-               blink: bool | None = None, bold: bool | None = None) -> "Cell":
+               blink: bool | None = None, bold: bool | None = None,
+               underline: bool | None = None) -> "Cell":
         return replace(
             self,
             fg=self.fg if fg is None else resolve_color(fg),
             bg=self.bg if bg is None else resolve_color(bg),
             blink=self.blink if blink is None else blink,
             bold=self.bold if bold is None else bold,
+            underline=self.underline if underline is None else underline,
         )
 
 
@@ -76,11 +79,14 @@ class CellBuffer:
     def write(self, row: int, col: int, text: str, *,
               fg: int | None = None, bg: int | None = None,
               blink: bool | None = None, bold: bool | None = None,
+              underline: bool | None = None,
               limit: int | None = None) -> int:
         """Scrive testo e ritorna la colonna successiva (clippata)."""
         if not 0 <= row < self.height:
             return col
-        style = self.get(row, col).styled(fg=fg, bg=bg, blink=blink, bold=bold)
+        style = self.get(row, col).styled(
+            fg=fg, bg=bg, blink=blink, bold=bold, underline=underline
+        )
         count = 0
         for offset, char in enumerate(text):
             if limit is not None and offset >= limit:
@@ -95,7 +101,8 @@ class CellBuffer:
 
     def fill_rect(self, row: int, col: int, height: int, width: int,
                   char: str = " ", *, fg: int | None = None, bg: int | None = None,
-                  blink: bool | None = None, bold: bool | None = None) -> None:
+                  blink: bool | None = None, bold: bool | None = None,
+                  underline: bool | None = None) -> None:
         for r in range(row, min(row + height, self.height)):
             if r < 0:
                 continue
@@ -103,7 +110,7 @@ class CellBuffer:
                 if c < 0:
                     continue
                 self._cells[r][c] = self._cells[r][c].styled(
-                    fg=fg, bg=bg, blink=blink, bold=bold
+                    fg=fg, bg=bg, blink=blink, bold=bold, underline=underline
                 )
                 self._cells[r][c] = replace(self._cells[r][c], ch=char)
 
@@ -148,17 +155,23 @@ class CellBuffer:
             current = row[0]
             count = 1
             for cell in row[1:]:
-                key = (cell.fg, cell.bg, cell.bold, cell.blink)
-                other = (current.fg, current.bg, current.bold, current.blink)
+                key = (cell.fg, cell.bg, cell.bold, cell.blink, cell.underline)
+                other = (current.fg, current.bg, current.bold, current.blink,
+                         current.underline)
                 if key == other:
                     count += 1
                     continue
-                runs.append(f"{count}@{current.fg},{current.bg},{int(current.bold)},{int(current.blink)}")
+                runs.append(self._run(count, current))
                 current = cell
                 count = 1
-            runs.append(f"{count}@{current.fg},{current.bg},{int(current.bold)},{int(current.blink)}")
+            runs.append(self._run(count, current))
             out.append(" ".join(runs))
         return "\n".join(out) + "\n"
+
+    @staticmethod
+    def _run(count: int, cell: Cell) -> str:
+        return (f"{count}@{cell.fg},{cell.bg},{int(cell.bold)},"
+                f"{int(cell.blink)},{int(cell.underline)}")
 
     # -- utilita' --------------------------------------------------------
     def text_of(self, row: int, col: int = 0, width: int | None = None) -> str:

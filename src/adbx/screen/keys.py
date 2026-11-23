@@ -103,3 +103,25 @@ def format(key: Key) -> str:
 
 def is_special(name: str) -> bool:
     return normalize_name(name) in SPECIAL_KEYS
+
+
+_SYMBOL_CHARS = {
+    "MINUS": "-", "EQUAL": "=", "PLUS": "+", "COMMA": ",", "PERIOD": ".",
+    "SEMICOLON": ";", "COLON": ":", "SLASH": "/", "BACKSLASH": "\\",
+    "LBRACKET": "[", "RBRACKET": "]", "QUOTE": "'", "DQUOTE": '"',
+    "BACKTICK": "`", "TILDE": "~", "BANG": "!", "QUESTION": "?", "STAR": "*",
+    "AMPERSAND": "&", "CARET": "^", "PERCENT": "%", "DOLLAR": "$",
+    "HASH": "#", "AT": "@", "LT": "<", "GT": ">", "LPAREN": "(",
+    "RPAREN": ")", "UNDERSCORE": "_", "LBRACE": "{", "RBRACE": "}",
+    "PIPE": "|",
+}
+
+
+def character(key: Key) -> str | None:
+    """Carattere digitabile di un tasto, in maiuscolo; `None` se non c'è."""
+    name = normalize_name(key.name)
+    if name in ("SPACE",):
+        return " "
+    if len(name) == 1 and name.isalnum():
+        return name.upper()
+    return _SYMBOL_CHARS.get(name)

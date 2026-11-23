@@ -102,7 +102,7 @@ def test_dump_is_deterministic_and_coded():
     dump = buffer.dump()
     assert dump.splitlines()[0] == "adbx 4x2"
     assert dump.splitlines()[1] == "hi  "
-    assert dump.splitlines()[2] == "2@15,1,0,0 2@7,1,0,0"
+    assert dump.splitlines()[2] == "2@15,1,0,0,0 2@7,1,0,0,0"
     assert buffer.dump() == dump
 
 

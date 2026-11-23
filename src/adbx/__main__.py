@@ -16,12 +16,16 @@ def main(argv: list[str] | None = None) -> int:
                         help="avvio headless: costruisce la schermata e stampa un digest")
     parser.add_argument("--dump", action="store_true",
                         help="con --smoke stampa il dump completo della griglia")
+    parser.add_argument("--data", metavar="DIR",
+                        help="cartella dati da mostrare all'avvio")
+    parser.add_argument("--open", metavar="FILE",
+                        help="database o set da aprire all'avvio")
     args = parser.parse_args(argv)
 
     if args.smoke:
-        from .screen.demo import demo_buffer
+        from .shell.controller import demo_controller
 
-        buffer = demo_buffer()
+        buffer = demo_controller().view().buffer
         dump = buffer.dump()
         digest = hashlib.sha256(dump.encode("utf-8")).hexdigest()[:16]
         if args.dump:
@@ -35,7 +39,7 @@ def main(argv: list[str] | None = None) -> int:
     except ImportError as exc:  # pragma: no cover
         print(f"PyQt6 non disponibile: {exc}", file=sys.stderr)
         return 2
-    return run(sys.argv if argv is None else [sys.argv[0], *argv])
+    return run([sys.argv[0]], data=args.data, open_path=args.open)
 
 
 if __name__ == "__main__":

@@ -9,11 +9,15 @@ finestra con una griglia di caratteri scalabile (132×43, font TrueType), su un 
 su Linux, Windows e macOS.
 
 - Licenza: MIT
-- Stato: pianificazione (O0 in avvio)
+- Stato: **O1 completata** — shell con Database Directory, main menu, aiuto contestuale
 - Piano completo: [`PLAN.md`](PLAN.md)
 - Diario di implementazione: [`DIARIO.md`](DIARIO.md)
 - Inventario funzionale estratto dai manuali:
   [`docs/reference/00-inventario.md`](docs/reference/00-inventario.md)
+- Specifiche: motore a celle [`docs/spec/00-motore-celle.md`](docs/spec/00-motore-celle.md),
+  scalabilità [`docs/spec/01-scalabilita.md`](docs/spec/01-scalabilita.md),
+  shell [`docs/spec/02-shell.md`](docs/spec/02-shell.md)
+- Schermate: [`docs/render/`](docs/render/)
 
 ## Perché una griglia di caratteri
 
@@ -23,15 +27,21 @@ il contenuto dello schermo. Rendere questa interfaccia con widget moderni
 cambierebbe il prodotto; renderla con celle la conserva e rende report,
 script e designer molto più semplici e fedeli.
 
-## Comandi previsti
+## Avvio
 
 ```bash
-./start.sh                # avvia l'app senza attivare un ambiente (crea .venv se serve)
-python -m adbx            # avvia l'applicazione (con PyQt6 già disponibile)
-python -m adbx --smoke    # avvio headless di verifica
-pytest                    # suite completa
-python tools/capture_ui.py  # rendering canonici
+./start.sh                        # avvia senza attivare un ambiente (crea .venv se serve)
+./start.sh --data ~/dati          # parte dalla cartella indicata
+./start.sh --open ~/dati/AVMOVIES.DBF  # apre subito un database
+python -m adbx --smoke            # avvio headless di verifica
+pytest                            # suite completa
+python tools/capture_ui.py        # rendering canonici
 ```
+
+La shell parte dal **Database Directory**: si sceglie un `.DBF`/`.SET`, si
+naviga con le frecce, si filtra con `*` e `?`, e con ENTER si arriva al main
+menu. `F1` apre l'aiuto contestuale, `F2`/`F3` mostrano struttura e stato,
+`ALT-F10` torna al menu, `Quit` chiude la sessione.
 
 ## Riferimenti
 

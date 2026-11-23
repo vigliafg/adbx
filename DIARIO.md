@@ -182,3 +182,62 @@ Formato:
   nella schermata demo (`AVMOVIES` 50 record, non 44); si allineeranno quando
   ci sarà il motore dati (O4).
 - Prossimo passo: O1 — shell.
+
+---
+
+### 2026-11-23 — Ondata O1 — Shell
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: l'ambiente che si vede all'avvio, con accettazione sulle lezioni
+  1 e 3 del Tutorial.
+- File toccati: nuovo pacchetto `src/adbx/shell/` (`controller.py`,
+  `screens.py`, `widgets.py`, `theme.py`, `help.py`, `files.py`, `state.py`),
+  `src/adbx/data/{__init__,dbf}.py`, `src/adbx/app.py`,
+  `src/adbx/__main__.py`, `src/adbx/cell/buffer.py` (attributo `underline`),
+  `src/adbx/render/qt_renderer.py` (sottolineatura), `src/adbx/screen/keys.py`
+  (`character`), rimossi `screen/demo.py` e `tests/test_shell.py`, nuovi test
+  (`test_dbf`, `test_directory`, `test_help`, `test_shell_menu`,
+  `test_shell_directory`, `test_lesson`, `test_golden`, `support.py`),
+  `tools/capture_ui.py`, `docs/spec/02-shell.md`, `README.md`, `PLAN.md`.
+- Scelte:
+  - **Controller senza Qt**: `ShellController.handle(Key)` e
+    `click(row, col)` producono un `View` (buffer + zone cliccabili). È la
+    stessa porta d'ingresso che userà il motore di script in O10.
+  - **Database Directory fedele**: path/filtro, `<Parent>`,
+    sottodirectory, `.SET`/`.DBF`, colonne Name/Type/Date, F3 Import (in O9),
+    F4 History, F6 Refresh, F8 Detail (Records/Fields dal DBF), F9 DOS
+    dichiarato non disponibile. Il campo nome si modifica carattere per
+    carattere, con cursore lampeggiante sottolineato.
+  - **Main menu** con i 12 comandi, hot key = lettera maiuscola
+    (`V P S I G C D L A U O Q`), status box a due righe, help line e menu
+    line. Finestra chiara con barra del titolo scura, come il riferimento.
+    Corretto l'elenco degli hot key nel PLAN: non sono W/L/R/V/… ma le
+    iniziali; `W` resta la scorciatoia per sWitch databases.
+  - **Aiuto contestuale** con topic nostri (non copiati dal manuale), rimandi
+    in blu, barra di selezione, ENTER per seguire, BACKSPACE per tornare,
+    ESC per chiudere, PgUp/PgDn per scorrere. Un test verifica che ogni
+    rimando punti a un topic esistente.
+  - **F2/F3** (struttura e stato) implementati perché la lezione 3 li usa:
+    15 campi per pagina, stato con file/record/campi/indice.
+  - **Database Directory legge il filesystem**: data dall'mtime (come il DIR
+    di DOS), record e campi dall'intestazione DBF. Il reader DBF è minimo e
+    tollerante: in O2 diventa la base dello strato dati.
+  - **Comandi non ancora pronti**: un avviso dice l'ondata (View/Print/
+    Search/ecc.); non si finge che funzionino. Niente banner iniziale.
+  - **Mouse**: clic seleziona, doppio clic esegue, tasto destro = ESC, clic
+    sulle voci della menu line esegue il tasto.
+  - Aggiunto `underline` alle celle, usato per i campi di immissione; il dump
+    golden ha ora un quinto attributo.
+- Test: `124 passed`; lint pulito. Accettazione lezioni 1 e 3 in
+  `tests/test_lesson.py`; help su ogni comando; directory da tastiera e mouse.
+  Verificata anche sui file reali del Tutorial in
+  `/tmp/opencode/alpha4v3/drivec/ALPHA4V3/TUTOR` (AVSALES: 109 record,
+  24 campi, struttura su due pagine).
+- Screenshot: `docs/render/01-main-menu.png`, `02-directory.png`,
+  `03-help.png`, `04-structure.png`, `05-status.png`.
+- Problemi aperti:
+  - Set, desktop, import, creazione database: avvisi con l'ondata prevista.
+  - Il main menu occupa 72 colonne su 132: il software originale era 80×25,
+    la proporzione non è replicabile senza deformare il carattere.
+  - Palette colori ancora provvisoria (O12); tema unico `newport`.
+- Prossimo passo: O2 — Dati e immissione.

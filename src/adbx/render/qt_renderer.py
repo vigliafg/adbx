@@ -139,6 +139,13 @@ class CellRenderer:
                 painter.drawImage(
                     QRectF(x / dpr, top, glyph_w, cell_h), image, source
                 )
+                if cell.underline:
+                    thickness = max(1, line // 14)
+                    underline_y = (self.ascent + max(1, thickness)) / dpr
+                    painter.fillRect(
+                        QRectF(x / dpr, top + underline_y, glyph_w, thickness / dpr),
+                        QColor(*self.palette[fg]),
+                    )
 
     def to_image(self, buffer: CellBuffer, *, blink_on: bool = True) -> QImage:
         width = round(self.cell_w * buffer.width * self.dpr)

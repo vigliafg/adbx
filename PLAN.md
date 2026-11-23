@@ -282,8 +282,9 @@ adbx/
 
 1. Schermo 132×43: riga 41 status, 42 help, 43 menu; area di lavoro 40 righe.
 2. Ogni comando è raggiungibile in tre modi: highlight+`ENTER`, **hot key**
-   (la maiuscola del nome: `W`, `L`, `R`, `V`, `E`, `B`, `M`, `C`, `D`, `O`,
-   `S`, `P`), mouse. I nomi dei comandi sono quindi API della tastiera.
+   (la maiuscola del nome: `V`, `P`, `S`, `I`, `G`, `C`, `D`, `L`, `A`, `U`,
+   `O`, `Q`), mouse. I nomi dei comandi sono quindi API della tastiera.
+   `W` è la scorciatoia per Choose database/set → sWitch databases.
 3. `F10` = Continue ovunque; box `Save` standard (`Save`, `save As`,
    `save and Continue editing`, `save and Preview`); `ALT-S` = Save.
 4. `ALT-F10` torna al main menu da ogni punto; `ESC`/tasto destro annullano un

@@ -10,6 +10,7 @@ __all__ = [
     "ESC",
     "TAB",
     "Key",
+    "character",
     "Layer",
     "Scene",
     "centered",

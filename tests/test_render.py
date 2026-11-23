@@ -15,11 +15,13 @@ def qapp():
 
 def test_renderer_size_and_image(qapp):
     from adbx.render.qt_renderer import CellRenderer
-    from adbx.screen.demo import demo_buffer
+    from adbx.shell import screens
+    from adbx.shell.state import demo_state
 
     renderer = CellRenderer(pixel_size=16)
     renderer.use_natural_size(16)
-    buffer = demo_buffer(show_popup=False)
+    view = screens.main_menu(demo_state())
+    buffer = view.buffer
     width, height = renderer.size(buffer)
     assert width > 0 and height > 0
 
@@ -69,6 +71,28 @@ def test_blink_phase_hides_glyph(qapp):
     assert lit(visible) > lit(hidden)
 
 
+def test_underline_is_drawn(qapp):
+    from adbx.cell.buffer import CellBuffer
+    from adbx.render.qt_renderer import CellRenderer
+
+    plain = CellBuffer(6, 1)
+    plain.write(0, 0, "TOKEN", fg=0, bg=7)
+    underlined = CellBuffer(6, 1)
+    underlined.write(0, 0, "TOKEN", fg=0, bg=7, underline=True)
+    renderer = CellRenderer(pixel_size=20)
+    renderer.use_natural_size(20)
+
+    def dark(image):
+        return sum(
+            1
+            for y in range(image.height())
+            for x in range(image.width())
+            if image.pixelColor(x, y).value() < 80
+        )
+
+    assert dark(renderer.to_image(underlined)) > dark(renderer.to_image(plain))
+
+
 def test_fit_scales_with_window(qapp):
     from adbx.render.qt_renderer import CellRenderer
 
@@ -90,7 +114,6 @@ def test_cells_come_from_font_metrics(qapp):
 
     renderer = CellRenderer(pixel_size=20)
     renderer.use_natural_size(20)
-    # Cella e font crescono insieme: nessun fattore di scala separato.
     assert renderer.advance > 0
     assert renderer.line_height == renderer.ascent + renderer.descent
     assert renderer.cell_w == pytest.approx(renderer.advance)
@@ -107,7 +130,6 @@ def test_geometric_line_is_continuous(qapp):
     renderer = CellRenderer(pixel_size=20)
     renderer.use_natural_size(20)
     image = renderer.to_image(buffer)
-    # La giunzione tra due celle non deve lasciare una riga vuota.
     boundary = round(renderer.cell_h)
     for y in (boundary - 1, boundary, boundary + 1):
         row_lit = [
