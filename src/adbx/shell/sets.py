@@ -913,6 +913,8 @@ class SetSession:
     child_index: int = 0
     zoom: RecordSession | None = None
     zoom_link: Link | None = None
+    form: object | None = None
+    form_page: int = 0
     status: str = ""
     close: bool = False
     _seqs: list[int] = field(init=False, default_factory=list)
@@ -942,7 +944,23 @@ class SetSession:
 
     @property
     def fields(self) -> list[tuple[str, Field, str]]:
-        return self.set_definition.flat_fields()
+        if self.form is None:
+            return self.set_definition.flat_fields()
+        result: list[tuple[str, Field, str]] = []
+        databases = self.set_definition.all_databases()
+        by_name = {database.name: database for database in databases}
+        for item in self.form.fields:
+            if item.kind != "field" or item.database not in by_name:
+                continue
+            try:
+                definition = by_name[item.database].field(item.field)
+            except KeyError:
+                continue
+            label = item.title or (
+                definition.name if item.database == self.set_definition.primary
+                else f"{item.database}.{definition.name}")
+            result.append((item.database, definition, label))
+        return result or self.set_definition.flat_fields()
 
     @property
     def child_links(self) -> list[Link]:
@@ -996,7 +1014,8 @@ class SetSession:
     def _start_new(self) -> None:
         self.seq = None
         self.draft = {(database, field.name): ""
-                      for database, field, _label in self.fields}
+                      for database, field, _label
+                      in self.set_definition.flat_fields()}
         self.field_index = 0
         self.dirty = False
         self._apply_primary_rules()
@@ -1058,6 +1077,12 @@ class SetSession:
             self.edit_text = ""
             return
         database, field, _label = pair
+        if self.form is not None:
+            for item in self.form.fields:
+                if item.kind == "field" and item.database == database \
+                        and item.field == field.name:
+                    self.form_page = item.page
+                    break
         value = self.draft.get((database, field.name), "")
         if database == self.set_definition.primary:
             rule = self._primary_rules().get(field.name)
@@ -1247,6 +1272,12 @@ class SetSession:
 
     def handle(self, key: Key) -> None:
         self.status = ""
+        if self.form is not None and key.ctrl \
+                and key.name in ("PGUP", "PGDN"):
+            self.form_page = max(0, min(self.form.pages - 1,
+                                        self.form_page
+                                        + (-1 if key.name == "PGUP" else 1)))
+            return
         if self.zoom is not None:
             self.zoom.handle(key)
             if self.zoom.close:
@@ -1377,6 +1408,8 @@ class SetSession:
         return f"Record {self.index + 1} of {len(self._seqs)}"
 
     def _form_view(self) -> View:
+        if self.form is not None:
+            return self._custom_set_form()
         buffer = CellBuffer(SCREEN_WIDTH, SCREEN_HEIGHT,
                             Cell(fg=self.theme.text, bg=self.theme.bg))
         buffer.fill_rect(0, 0, SCREEN_HEIGHT, SCREEN_WIDTH, " ",
@@ -1445,6 +1478,120 @@ class SetSession:
                     buffer.write(screen_row, 2 + column * 18,
                                  clip_text(values.get(field.name, ""), 16),
                                  fg=fg, bg=bg)
+        draw_help_line(buffer, self.theme,
+                       self.status or ("F6 child region   Alt-Z zoom   "
+                                       "F10 save" if self.mode in
+                                       ("enter", "change") else
+                                       "F6 child region   Alt-Z zoom   "
+                                       "F10 continue"))
+        draw_menu_line(buffer, self.theme, SET_SESSION_KEYS)
+        return View(buffer, [])
+
+    def _custom_set_form(self) -> View:
+        form = self.form
+        buffer = CellBuffer(SCREEN_WIDTH, SCREEN_HEIGHT,
+                            Cell(fg=self.theme.text, bg=self.theme.bg))
+        buffer.fill_rect(0, 0, SCREEN_HEIGHT, SCREEN_WIDTH, " ",
+                         fg=self.theme.text, bg=self.theme.bg)
+        title_bar(buffer, self.title, self.theme)
+        draw_status_line(buffer, self.theme,
+                         self.status or self._status_line())
+        page = max(0, min(self.form_page, form.pages - 1))
+        for box in form.page_boxes(page):
+            buffer.box(box.row, box.col, box.height, box.width,
+                       fg=self.theme.border, bg=self.theme.bg,
+                       double=box.double)
+        for label in form.page_labels(page):
+            buffer.write(label.row, label.col, clip_text(
+                label.text, max(0, SCREEN_WIDTH - label.col)),
+                fg=self.theme.text, bg=self.theme.bg)
+        pairs = self.fields
+        active_pair = pairs[self.field_index] if pairs else None
+        for item in form.page_fields(page):
+            if item.kind == "summary":
+                link = None
+                for candidate in self.child_links:
+                    if candidate.child == (item.summary_database
+                                           or item.database):
+                        link = candidate
+                        break
+                rows = (self.set_definition.linked_rows(link,
+                                                        self._parent_values())
+                        if link is not None else [])
+                text = form.summary_value(item, [values for _seq, values in rows])
+            elif item.kind == "calculated":
+                database = self.set_definition.database(item.database)
+                text = form.value_for(item, self._parent_values(), database)
+            else:
+                text = self.draft.get((item.database, item.field), "")
+            width = max(1, item.window or item.length or 1)
+            if item.show_title and item.title:
+                buffer.write(item.row - 1, item.col,
+                             clip_text(item.title, max(20, width)),
+                             fg=self.theme.label, bg=self.theme.bg)
+            active = (active_pair is not None
+                      and item.kind == "field"
+                      and item.database == active_pair[0]
+                      and item.field == active_pair[1].name
+                      and self.focus == "form")
+            if active and self.mode in ("enter", "change"):
+                buffer.fill_rect(item.row, item.col, 1, width, " ",
+                                 fg=self.theme.selected_fg,
+                                 bg=self.theme.selected_bg)
+                buffer.write(item.row, item.col,
+                             clip_text(self.edit_text, width),
+                             fg=self.theme.selected_fg,
+                             bg=self.theme.selected_bg, underline=True)
+            else:
+                if item.justification == "R":
+                    text = text.rjust(width)
+                elif item.justification == "C":
+                    text = text.center(width)
+                buffer.write(item.row, item.col, clip_text(text, width),
+                             fg=self.theme.text, bg=self.theme.bg,
+                             bold=item.kind in ("calculated", "summary"))
+        # regioni
+        for region in form.page_regions(page):
+            link = next((candidate for candidate in self.child_links
+                         if candidate.child == region.database), None)
+            if link is None:
+                continue
+            rows = self.set_definition.linked_rows(link,
+                                                   self._parent_values())
+            buffer.box(region.row, region.col, region.height, region.width,
+                       fg=self.theme.accent, bg=self.theme.bg)
+            buffer.write(region.row, region.col + 2,
+                         clip_text(f" {region.title or region.database} ",
+                                   region.width - 4),
+                         fg=self.theme.accent, bg=self.theme.bg, bold=True)
+            child = self.set_definition.database(region.database)
+            fields = child.fields
+            if self.focus == "child" and link is self.current_child_link:
+                selected = self.child_index
+            else:
+                selected = -1
+            visible = region.height - 2
+            top = max(0, min(selected - visible + 1,
+                             max(0, len(rows) - visible)))
+            for offset, (seq, child_values) in enumerate(rows[top:top + visible]):
+                screen_row = region.row + 1 + offset
+                if screen_row >= region.row + region.height - 1:
+                    break
+                current = top + offset == selected
+                fg = self.theme.selected_fg if current else self.theme.text
+                bg = self.theme.selected_bg if current else self.theme.bg
+                if current:
+                    buffer.fill_rect(screen_row, region.col + 1, 1,
+                                     region.width - 2, " ", fg=fg, bg=bg)
+                col = region.col + 1
+                for definition in fields:
+                    text = child_values.get(definition.name, "")
+                    buffer.write(screen_row, col,
+                                 clip_text(text, max(1, definition.length)),
+                                 fg=fg, bg=bg)
+                    col += max(1, definition.length) + 1
+                    if col >= region.col + region.width - 1:
+                        break
         draw_help_line(buffer, self.theme,
                        self.status or ("F6 child region   Alt-Z zoom   "
                                        "F10 save" if self.mode in

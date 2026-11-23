@@ -386,6 +386,15 @@ class Workspace:
                 range_json TEXT NOT NULL DEFAULT '{}',
                 def_version INTEGER NOT NULL DEFAULT 0
             );
+            CREATE TABLE IF NOT EXISTS adbx_forms (
+                owner TEXT NOT NULL,
+                letter TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                definition TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 0,
+                updated REAL NOT NULL,
+                PRIMARY KEY (owner, letter)
+            );
             CREATE TABLE IF NOT EXISTS adbx_sets (
                 name TEXT PRIMARY KEY,
                 description TEXT NOT NULL DEFAULT '',
@@ -519,6 +528,92 @@ class Workspace:
             (json.dumps(settings.to_dict()), settings.primary, name))
         self._connection.commit()
 
+    # -- form ------------------------------------------------------------
+    def forms(self, owner: str) -> list:
+        from .forms import FormDefinition
+
+        owner = owner.strip().upper()
+        result = []
+        for row in self._connection.execute(
+                "SELECT definition FROM adbx_forms WHERE owner = ? "
+                "ORDER BY letter", (owner,)):
+            try:
+                import json
+                result.append(FormDefinition.from_dict(
+                    self, json.loads(row["definition"])))
+            except (ValueError, TypeError):
+                continue
+        return result
+
+    def form_names(self, owner: str) -> list[str]:
+        return [form.label for form in self.forms(owner)]
+
+    def get_form(self, owner: str, letter: str):
+        import json
+
+        from .forms import FormDefinition
+
+        row = self._connection.execute(
+            "SELECT definition FROM adbx_forms WHERE owner = ? AND letter = ?",
+            (owner.strip().upper(), letter.strip().upper())).fetchone()
+        if row is None:
+            return None
+        return FormDefinition.from_dict(self, json.loads(row["definition"]))
+
+    def active_form(self, owner: str):
+        import json
+
+        from .forms import FormDefinition
+
+        row = self._connection.execute(
+            "SELECT definition FROM adbx_forms WHERE owner = ? AND active = 1",
+            (owner.strip().upper(),)).fetchone()
+        if row is None:
+            return None
+        return FormDefinition.from_dict(self, json.loads(row["definition"]))
+
+    def save_form(self, form) -> None:
+        import json
+
+        form.validate()
+        self._connection.execute(
+            "UPDATE adbx_forms SET active = 0 WHERE owner = ?", (form.owner,))
+        self._connection.execute(
+            "INSERT INTO adbx_forms (owner, letter, description, definition, "
+            "active, updated) VALUES (?, ?, ?, ?, 1, ?) "
+            "ON CONFLICT(owner, letter) DO UPDATE SET "
+            "description = excluded.description, "
+            "definition = excluded.definition, active = 1, "
+            "updated = excluded.updated",
+            (form.owner, form.letter, form.description,
+             json.dumps(form.to_dict()), time.time()))
+        self._connection.commit()
+
+    def set_active_form(self, owner: str, letter: str) -> bool:
+        owner = owner.strip().upper()
+        letter = letter.strip().upper()
+        row = self._connection.execute(
+            "SELECT 1 FROM adbx_forms WHERE owner = ? AND letter = ?",
+            (owner, letter)).fetchone()
+        if row is None:
+            return False
+        self._connection.execute(
+            "UPDATE adbx_forms SET active = 0 WHERE owner = ?", (owner,))
+        self._connection.execute(
+            "UPDATE adbx_forms SET active = 1 WHERE owner = ? AND letter = ?",
+            (owner, letter))
+        self._connection.commit()
+        return True
+
+    def delete_form(self, owner: str, letter: str) -> bool:
+        owner = owner.strip().upper()
+        letter = letter.strip().upper()
+        cursor = self._connection.execute(
+            "DELETE FROM adbx_forms WHERE owner = ? AND letter = ?",
+            (owner, letter))
+        self._connection.commit()
+        return cursor.rowcount > 0
+
     # -- set -------------------------------------------------------------
     def set_names(self) -> list[str]:
         return [str(row[0]) for row in self._connection.execute(
@@ -584,6 +679,8 @@ class Workspace:
             "DELETE FROM adbx_sets WHERE name = ?", (name,))
         self._connection.execute(
             "DELETE FROM adbx_field_rules WHERE owner = ?", (name,))
+        self._connection.execute(
+            "DELETE FROM adbx_forms WHERE owner = ?", (name,))
         self._connection.commit()
         return True
 

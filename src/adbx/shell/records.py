@@ -235,6 +235,8 @@ class RecordSession:
     double: tuple[str, str] | None = None
     rule_map: dict[str, field_rules.FieldRule] = field(
         init=False, default_factory=dict)
+    form: object | None = None
+    form_page: int = 0
     _seqs: list[int] = field(init=False, default_factory=list)
     _browse_rows: list[tuple[int, bool, dict[str, str]]] | None = field(
         init=False, default=None)
@@ -253,6 +255,8 @@ class RecordSession:
             self.range_settings.show = SHOW_ALL
         self.show_deleted = self.range_settings.show != SHOW_NOT_DELETED
         self._reload()
+        if self.form is not None and self.form.fields:
+            self.form_page = min(item.page for item in self.form.fields)
         if self.mode == "enter":
             self._start_new()
         elif self._seqs:
@@ -482,13 +486,40 @@ class RecordSession:
         self._load_field()
         self._maybe_open_lookup()
 
+    def _navigation_fields(self) -> list[Field]:
+        if self.form is None:
+            return list(self.database.fields)
+        result: list[Field] = []
+        seen: set[str] = set()
+        for item in self.form.fields:
+            if item.kind != "field" or item.database != self.database.name:
+                continue
+            if item.field in seen:
+                continue
+            try:
+                result.append(self.database.field(item.field))
+                seen.add(item.field)
+            except KeyError:
+                continue
+        return result or list(self.database.fields)
+
+    def _form_field(self, field: Field | None):
+        if self.form is None or field is None:
+            return None
+        for item in self.form.fields:
+            if item.kind == "field" and item.database == self.database.name \
+                    and item.field == field.name:
+                return item
+        return None
+
     def _first_usable(self, start: int, direction: int) -> int:
-        count = len(self.database.fields)
+        fields = self._navigation_fields()
+        count = len(fields)
         if not count:
             return 0
         index = start
         for _step in range(count):
-            field = self.database.fields[index]
+            field = fields[index]
             rule = self._rule(field)
             if not self._is_calculated(field) and not (
                     rule is not None
@@ -506,8 +537,9 @@ class RecordSession:
 
     # -- campi -----------------------------------------------------------
     def _field(self) -> Field | None:
-        if 0 <= self.field_index < len(self.database.fields):
-            return self.database.fields[self.field_index]
+        fields = self._navigation_fields()
+        if 0 <= self.field_index < len(fields):
+            return fields[self.field_index]
         return None
 
     def _load_field(self) -> None:
@@ -517,6 +549,9 @@ class RecordSession:
             self.edit_cursor = 0
             return
         value = self.draft.get(field.name, "")
+        item = self._form_field(field)
+        if item is not None:
+            self.form_page = item.page
         rule = self._rule(field)
         if field.is_memo:
             self.edit_text = ""
@@ -610,7 +645,8 @@ class RecordSession:
                 field_rules.missing_required(rule, self.database, self.draft):
             self.status = f"{field.name} is required."
             return
-        count = len(self.database.fields)
+        fields = self._navigation_fields()
+        count = len(fields)
         if count == 0:
             return
         target = self.field_index + delta
@@ -620,7 +656,7 @@ class RecordSession:
             target = max(0, min(count - 1, target))
         direction = 1 if delta > 0 else -1
         for _step in range(count):
-            candidate = self.database.fields[target]
+            candidate = fields[target]
             candidate_rule = self._rule(candidate)
             calculated = self._is_calculated(candidate)
             skipped = (candidate_rule is not None and
@@ -958,10 +994,9 @@ class RecordSession:
             field = self._field()
             if field is not None and field.is_memo:
                 return field
-            if field is not None and self.field_index < len(self.database.fields):
-                pass
-        if 0 <= self.field_index < len(self.database.fields):
-            candidate = self.database.fields[self.field_index]
+        navigation = self._navigation_fields()
+        if 0 <= self.field_index < len(navigation):
+            candidate = navigation[self.field_index]
             if candidate.is_memo:
                 return candidate
         return next(iter(self.database.memo_fields), None)
@@ -1002,14 +1037,16 @@ class RecordSession:
             if seq is None:
                 return ""
             values = self.database.read(seq)
-            field = self.database.fields[min(self.browse_field, len(self.database.fields) - 1)]
+            field = self.database.fields[min(self.browse_field,
+                                             len(self.database.fields) - 1)]
             return format_value(field, values.get(field.name, ""))
         if self.mode in ("enter", "change"):
             return self.edit_text
         values = self._values()
-        if not self.database.fields:
+        navigation = self._navigation_fields()
+        if not navigation:
             return ""
-        field = self.database.fields[min(self.field_index, len(self.database.fields) - 1)]
+        field = navigation[min(self.field_index, len(navigation) - 1)]
         if field.is_memo:
             return values.get(field.name, "")
         return format_value(field, values.get(field.name, ""))
@@ -1247,6 +1284,18 @@ class RecordSession:
     def handle(self, key: Key) -> None:
         self.status = ""
         self.help_topic = "browse" if self.mode == "browse" else "records"
+        if self.form is not None and key.ctrl and key.name in ("PGUP", "PGDN"):
+            self.form_page = max(0, min(self.form.pages - 1,
+                                        self.form_page
+                                        + (-1 if key.name == "PGUP" else 1)))
+            navigation = self._navigation_fields()
+            for index, field in enumerate(navigation):
+                item = self._form_field(field)
+                if item is not None and item.page == self.form_page:
+                    self.field_index = index
+                    self._load_field()
+                    break
+            return
         if self.lookup is not None:
             self._handle_lookup(key)
             return
@@ -1333,11 +1382,15 @@ class RecordSession:
         elif name == "END":
             self._goto_record(len(self._seqs) - 1)
         elif name == "LEFT":
-            if self.database.fields:
-                self.field_index = (self.field_index - 1) % len(self.database.fields)
+            fields = self._navigation_fields()
+            if fields:
+                self.field_index = (self.field_index - 1) % len(fields)
+                self._load_field()
         elif name == "RIGHT":
-            if self.database.fields:
-                self.field_index = (self.field_index + 1) % len(self.database.fields)
+            fields = self._navigation_fields()
+            if fields:
+                self.field_index = (self.field_index + 1) % len(fields)
+                self._load_field()
 
     def _handle_browse(self, key: Key) -> None:
         name = key.name
@@ -1408,8 +1461,9 @@ class RecordSession:
             self._open_lookup()
         elif name == "ENTER":
             field = self._field()
+            navigation = self._navigation_fields()
             if (self.mode == "enter" and field is not None
-                    and self.field_index == len(self.database.fields) - 1):
+                    and self.field_index == len(navigation) - 1):
                 if self.save():
                     self._start_new()
             else:
@@ -1436,7 +1490,8 @@ class RecordSession:
         elif kind == "field" and value.isdigit():
             if self.mode in ("enter", "change"):
                 self._commit_field()
-            self.field_index = max(0, min(len(self.database.fields) - 1, int(value)))
+            navigation = self._navigation_fields()
+            self.field_index = max(0, min(len(navigation) - 1, int(value)))
             self._load_field()
         elif kind == "col" and value.isdigit():
             self.browse_field = int(value)

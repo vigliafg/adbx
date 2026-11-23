@@ -9,7 +9,7 @@ finestra con una griglia di caratteri scalabile (132×43, font TrueType), su un 
 su Linux, Windows e macOS.
 
 - Licenza: MIT
-- Stato: **O5 completata** — set con link, integrità referenziale, cascading, regioni e zoom
+- Stato: **O6 completata** — form designer a celle, form personalizzati, regioni, calcolati e summary
 - Piano completo: [`PLAN.md`](PLAN.md)
 - Diario di implementazione: [`DIARIO.md`](DIARIO.md)
 - Inventario funzionale estratto dai manuali:
@@ -23,6 +23,7 @@ su Linux, Windows e macOS.
   ricerca e indici [`docs/spec/05-ricerca-indici.md`](docs/spec/05-ricerca-indici.md),
   regole di campo [`docs/spec/06-regole-campo.md`](docs/spec/06-regole-campo.md),
   set e regioni [`docs/spec/07-set.md`](docs/spec/07-set.md),
+  form designer [`docs/spec/08-form.md`](docs/spec/08-form.md),
   ambiente DOS di riferimento
   [`docs/spec/03-ambiente-dos-riferimento.md`](docs/spec/03-ambiente-dos-riferimento.md)
 - Schermate: [`docs/render/`](docs/render/)
@@ -79,6 +80,14 @@ campo comune, integrità referenziale con cascading updates/deletes e
 uno-a-uno, mostra i figli uno-a-molti in una regione dedicata (F6) e permette
 lo zoom sul figlio (`Alt-Z`). Enter/Change aggiornano il genitore e i figli
 modificabili; il delete cascata sui figli collegati.
+
+Con **O6** le schermate diventano disegnabili: `Layouts → Forms` crea fino a
+26 form per database o set, su 10 pagine, con campi, testi, riquadri, regioni
+1:N, campi calcolati e summary. `F2` inserisce un campo, `F8` un riquadro,
+`F6` una regione, `F9` le opzioni di formattazione, `F7` i parametri
+(descrizione, menu, restrict, stampa). Il form salvato diventa attivo e
+View/Enter/Change lo usano, rispettando l'ordine dei campi e il formato memo
+multilinea.
 
 ## Riferimenti
 

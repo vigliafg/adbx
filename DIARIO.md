@@ -480,3 +480,44 @@ Formato:
   - `Prompt` sull'aggiunta di figli è trattato come `Yes`.
   - Enter/Change applica le regole del primario, non quelle dei figli.
 - Prossimo passo: O6 — Form designer.
+
+---
+
+### 2026-11-23 — Ondata O6 — Form designer
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: disegnare form a celle per database e set, con campi, testi,
+  riquadri, regioni 1:N, calcolati, summary, parametri e stampa.
+- File toccati: nuovi `src/adbx/data/forms.py` (modello, pagine, validazione,
+  calcolati/summary, persistenza), `src/adbx/shell/forms.py` (Form Designer,
+  parametri, formatting, campi sintetici), specifica
+  `docs/spec/08-form.md`, screenshot `21-form-designer.png`,
+  `22-custom-form.png`, `23-set-form.png`, `24-formatting.png`; aggiornati
+  `workspace.py` (tabella `adbx_forms`, active form, delete), `controller.py`
+  (Layouts → Forms, select/erase, form attivo in View/Enter/Change),
+  `records.py`/`record_screens.py` (navigazione e rendering custom form),
+  `sets.py` (form dei set con regioni e summary), `help.py`, `README.md`,
+  `tools/capture_ui.py`; test nuovi `test_forms`, `test_forms_ui`.
+- Scelte:
+  - **Form in SQLite**, non file `.INx`: proprietario, lettera, descrizione,
+    pagine, campi, etichette, riquadri, regioni e parametri.
+  - **Fino a 26 form e 10 pagine**; il form salvato diventa attivo
+    automaticamente.
+  - **Layout a celle**: F2 campo, F4 calcolato/summary, F5 delete, F6 regione
+    1:N, F7 parametri, F8 riquadro, F9 formatting (Len/Window/Just/Fmt/Title),
+    F10 save.
+  - **RecordSession** usa il form attivo: ordine dei campi, memo multilinea
+    `!X`, campi esclusi non visitati, calcolati in sola lettura.
+  - **SetSession** usa il form del set: campi da più database, regioni con
+    F6/zoom, summary su Count/Total/Average/Biggest/Smallest/First/Last.
+- Test: **262 passed**; `uvx ruff check src tests tools` pulito;
+  `./start.sh --smoke` e `--version` verdi. Accettazione form in
+  `test_forms_ui`; modello in `test_forms`.
+- Problemi aperti / deviazioni dichiarate:
+  - Colori, restrict access e custom menu bar sono memorizzati ma non
+    applicati; la stampa arriva con O7.
+  - Niente Borrow form, Block/Move/Copy, editor di regione completo,
+    auto-expand `@`.
+  - Il titolo del campo è sopra il campo, non posizionabile separatamente.
+  - I form dei database non hanno regioni; i summary usano i link 1:N dei set.
+- Prossimo passo: O7 — Report engine.

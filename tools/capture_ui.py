@@ -23,12 +23,20 @@ from PyQt6.QtGui import QGuiApplication  # noqa: E402
 from adbx.data import indexing  # noqa: E402
 from adbx.data.expressions import SearchRow  # noqa: E402
 from adbx.data.fields import Field  # noqa: E402
+from adbx.data.forms import (  # noqa: E402
+    FormBox,
+    FormDefinition,
+    FormField,
+    FormLabel,
+    FormRegion,
+)
 from adbx.data.rules import FieldRule, LookupTable, PostingRule  # noqa: E402
 from adbx.data.sets import Link, SetDefinition  # noqa: E402
 from adbx.data.workspace import Workspace  # noqa: E402
 from adbx.render.qt_renderer import CellRenderer  # noqa: E402
 from adbx.shell import screens  # noqa: E402
 from adbx.shell.designer import DesignerSession  # noqa: E402
+from adbx.shell.forms import FormDesigner  # noqa: E402
 from adbx.shell.indexes import IndexSession, RangeSession  # noqa: E402
 from adbx.shell.records import RecordSession  # noqa: E402
 from adbx.shell.rules import (  # noqa: E402
@@ -188,6 +196,63 @@ def main(argv: list[str] | None = None) -> int:
         set_designer.selected = 2
         set_designer.row = 3
         set_designer._load_row()
+        movie_form = FormDefinition(workspace, "AVMOVIES", "A",
+                                    "Alpha Video Movie")
+        movie_form.labels = [
+            FormLabel(0, 1, 2, "Alpha Video Movies"),
+            FormLabel(0, 3, 2, "Id:"),
+            FormLabel(0, 4, 2, "Title:"),
+            FormLabel(0, 5, 2, "Subject:"),
+            FormLabel(0, 6, 2, "Rating:"),
+            FormLabel(0, 9, 2, "Description:"),
+        ]
+        movie_form.boxes = [FormBox(0, 2, 1, 7, 92, True)]
+        movie_form.fields = [
+            FormField("AVMOVIES", "TAPE_ID", 0, 3, 10, 4, 4),
+            FormField("AVMOVIES", "TAPE_TITLE", 0, 4, 10, 40, 40),
+            FormField("AVMOVIES", "SUBJECT", 0, 5, 10, 20, 20),
+            FormField("AVMOVIES", "RATING", 0, 6, 10, 5, 5),
+            FormField("AVMOVIES", "TAPE_DESC", 0, 10, 2, 300, 50,
+                      format="!X"),
+        ]
+        movie_form.save()
+        database.set_primary_index("AVMOVSUB")
+        movie_view = RecordSession(database, "view", form=movie_form)
+
+        set_form = FormDefinition(workspace, "AVIDEO", "A",
+                                  "Alpha Video Invoice")
+        set_form.labels = [
+            FormLabel(0, 1, 2, "Invoice:"),
+            FormLabel(0, 2, 2, "Customer:"),
+            FormLabel(0, 3, 2, "City:"),
+            FormLabel(0, 9, 2, "Line items"),
+        ]
+        set_form.boxes = [FormBox(0, 1, 1, 8, 100, True),
+                          FormBox(0, 11, 1, 12, 80, True)]
+        set_form.fields = [
+            FormField("AVHEADER", "INV_NO", 0, 1, 14, 6, 6),
+            FormField("AVPATRON", "NAME", 0, 2, 14, 20, 20),
+            FormField("AVPATRON", "CITY", 0, 3, 14, 15, 15),
+            FormField("CALC", "TOTAL", 0, 3, 60, 12, 12, "Items total", True,
+                      "R", kind="summary", summary="Total",
+                      summary_field="QUANTITY", summary_database="AVITEMS"),
+        ]
+        set_form.regions = [FormRegion("AVITEMS", 0, 12, 2, 10, 72,
+                                       "Line items")]
+        set_form.printable = False
+        set_form.save()
+        set_form_view = SetSession(set_definition, "view", form=set_form)
+        form_designer = FormDesigner(workspace, header, owner="AVIDEO",
+                                     form=set_form)
+        form_designer.stage = "layout"
+        form_designer.row = 12
+        form_designer.col = 2
+        form_designer.page = 0
+        form_designer_format = FormDesigner(workspace, header, owner="AVIDEO",
+                                            form=set_form)
+        form_designer_format.stage = "formatting"
+        form_designer_format.format_row = 1
+        form_designer_format.format_col = 2
         set_view = SetSession(set_definition, "view")
         set_browse = SetSession(set_definition, "browse")
         lookup_record = RecordSession(database, "enter")
@@ -222,6 +287,10 @@ def main(argv: list[str] | None = None) -> int:
             "18-set-editor": set_designer.view(),
             "19-set-view": set_view.view(),
             "20-set-browse": set_browse.view(),
+            "21-form-designer": form_designer.view(),
+            "22-custom-form": movie_view.view(),
+            "23-set-form": set_form_view.view(),
+            "24-formatting": form_designer_format.view(),
         }
         for name, view in shots.items():
             image = renderer.to_image(view.buffer)

@@ -25,6 +25,8 @@ NUMBER_WIDTH = 6
 
 
 def form_screen(session: RecordSession, theme: Theme = NEWPORT) -> View:
+    if session.form is not None:
+        return custom_form_screen(session, theme)
     buffer = CellBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, Cell(fg=theme.text, bg=theme.bg))
     buffer.fill_rect(0, 0, SCREEN_HEIGHT, SCREEN_WIDTH, " ",
                      fg=theme.text, bg=theme.bg)
@@ -326,3 +328,82 @@ def lookup_overlay(session: RecordSession, theme: Theme = NEWPORT) -> View:
                STATUS_ROW - height - 1][line]
     return screens.overlay_view(base, panel, max(1, row), max(1, col),
                                 regions, theme)
+
+
+def custom_form_screen(session: RecordSession,
+                       theme: Theme = NEWPORT) -> View:
+    """Form definito dall'utente: campi, testi, riquadri e pagine."""
+    form = session.form
+    buffer = CellBuffer(SCREEN_WIDTH, SCREEN_HEIGHT,
+                        Cell(fg=theme.text, bg=theme.bg))
+    buffer.fill_rect(0, 0, SCREEN_HEIGHT, SCREEN_WIDTH, " ",
+                     fg=theme.text, bg=theme.bg)
+    title_bar(buffer, f"{session.title} - {session.database.name}", theme)
+    values = session._values()
+    page = max(0, min(session.form_page, form.pages - 1))
+    for box in form.page_boxes(page):
+        buffer.box(box.row, box.col, box.height, box.width,
+                   fg=theme.border, bg=theme.bg, double=box.double)
+    for label in form.page_labels(page):
+        buffer.write(label.row, label.col, clip_text(
+            label.text, max(0, SCREEN_WIDTH - label.col)), fg=theme.text,
+            bg=theme.bg)
+    navigation = session._navigation_fields()
+    active_name = ""
+    if 0 <= session.field_index < len(navigation):
+        active_name = navigation[session.field_index].name
+    for item in form.page_fields(page):
+        if item.kind == "summary":
+            text = ""
+        elif item.kind == "calculated":
+            text = form.value_for(item, values, session.database)
+        else:
+            text = values.get(item.field, "")
+        width = max(1, item.window or item.length or 1)
+        if item.show_title and item.title:
+            buffer.write(item.row - 1, item.col,
+                         clip_text(item.title, max(20, width)),
+                         fg=theme.label, bg=theme.bg)
+        if item.format.startswith("!") and item.kind == "field":
+            body = text[: item.length or len(text)]
+            lines = [body[index:index + width]
+                     for index in range(0, len(body), width)] or [""]
+            for offset, line in enumerate(lines):
+                buffer.write(item.row + offset, item.col,
+                             clip_text(line, width), fg=theme.text,
+                             bg=theme.bg)
+            continue
+        active = (session.mode in ("enter", "change")
+                  and item.kind == "field" and item.field == active_name)
+        if active:
+            buffer.fill_rect(item.row, item.col, 1, width, " ",
+                             fg=theme.selected_fg, bg=theme.selected_bg)
+            text = session.edit_text
+            buffer.write(item.row, item.col, clip_text(text, width),
+                         fg=theme.selected_fg, bg=theme.selected_bg,
+                         underline=True)
+        else:
+            if item.justification == "R":
+                text = text.rjust(width)
+            elif item.justification == "C":
+                text = text.center(width)
+            buffer.write(item.row, item.col, clip_text(text, width),
+                         fg=theme.text, bg=theme.bg,
+                         bold=item.kind in ("calculated", "summary"))
+        if item.kind == "field":
+            index = next((position for position, field in enumerate(navigation)
+                          if field.name == item.field), -1)
+            if index >= 0:
+                buffer_region = Region(item.row, item.col, 1, width,
+                                       f"rec:field:{index}")
+                # regioni raccolte sotto
+                session._form_regions = getattr(session, "_form_regions", [])
+                session._form_regions.append(buffer_region)
+    draw_status_line(buffer, theme, _position_text(session))
+    hint = _form_hint(session)
+    draw_help_line(buffer, theme,
+                   session.status or _form_field_hint(session) or hint)
+    regions = list(getattr(session, "_form_regions", []))
+    session._form_regions = []
+    regions.extend(draw_menu_line(buffer, theme, MODE_KEYS[session.mode]))
+    return View(buffer, regions)

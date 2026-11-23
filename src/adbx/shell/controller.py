@@ -21,6 +21,7 @@ from ..screen.keys import parse as parse_key
 from . import screens
 from .designer import DesignerSession
 from .files import strip_wildcard
+from .forms import FormDesigner
 from .help import link_spans, topic, wrap_topic
 from .indexes import IndexSession, RangeSession
 from .records import RecordSession
@@ -77,6 +78,20 @@ SET_ITEMS: tuple[tuple[str, str], ...] = (
     ("Create a set design", "create"),
     ("Modify a set design", "modify"),
     ("Erase a set design", "erase"),
+)
+
+LAYOUT_ITEMS: tuple[tuple[str, str], ...] = (
+    ("Forms", "forms"),
+    ("Browse tables", "browse-tables"),
+    ("Reports", "reports"),
+    ("Mail labels", "labels"),
+    ("Letters", "letters"),
+)
+
+FORM_ITEMS: tuple[tuple[str, str], ...] = (
+    ("Create/edit a form", "create"),
+    ("Select active form", "select"),
+    ("Erase a form", "erase"),
 )
 
 RULES_ITEMS: tuple[tuple[str, str], ...] = (
@@ -172,6 +187,7 @@ class ShellController:
         self.active_set = None
         self.set_records: SetSession | None = None
         self.set_designer: SetDesigner | None = None
+        self.form_designer: FormDesigner | None = None
         self.pending_index_name = ""
         self.pending_locate_text = ""
         self.pending_replace: list[str] = []
@@ -205,6 +221,8 @@ class ShellController:
             base = self.set_records.view()
         elif self.base == "setdesigner" and self.set_designer is not None:
             base = self.set_designer.view()
+        elif self.base == "formdesigner" and self.form_designer is not None:
+            base = self.form_designer.view()
         elif self.base == "directory":
             base = screens.directory(
                 self.state, self.cursor, self.input_text, self.input_cursor,
@@ -244,6 +262,8 @@ class ShellController:
                 "other": "Other",
                 "field-rules": "Field Rules",
                 "sets": "Set Commands",
+                "layouts": "Layouts",
+                "forms": "Forms",
             }.get(overlay.target, "Desktop Options")
             items = overlay.items or list(DESKTOP_ITEMS)
             return screens.submenu_overlay(base, items, overlay.selected,
@@ -295,6 +315,8 @@ class ShellController:
             self._handle_set_records(key)
         elif self.base == "setdesigner":
             self._handle_set_designer(key)
+        elif self.base == "formdesigner":
+            self._handle_form_designer(key)
         elif self.base == "directory":
             self._handle_directory(key)
         elif self.base == "structure":
@@ -650,6 +672,13 @@ class ShellController:
             self.overlay = Overlay("submenu", items=list(DESIGN_ITEMS),
                                    target="design")
             return
+        if topic_id == "layouts":
+            if self.database is None:
+                self._notice("Select a database or set first.")
+                return
+            self.overlay = Overlay("submenu", items=list(LAYOUT_ITEMS),
+                                   target="layouts")
+            return
         if topic_id == "utilities":
             self.overlay = Overlay("submenu", items=list(UTILITY_ITEMS),
                                    target="utilities")
@@ -701,14 +730,18 @@ class ShellController:
             show_deleted = True
         else:
             show_deleted = False
+        owner = self._form_owner()
+        form = (self.workspace.active_form(owner)
+                if self.workspace is not None and owner else None)
         if self.active_set is not None:
-            self.set_records = SetSession(self.active_set, mode, self.theme)
+            self.set_records = SetSession(self.active_set, mode, self.theme,
+                                          form=form)
             self.base = "setrecords"
             self.overlay = None
             return
         self.records = RecordSession(self.database, mode, self.theme,
                                      clipboard=self.clipboard,
-                                     show_deleted=show_deleted)
+                                     show_deleted=show_deleted, form=form)
         self.base = "records"
         self.overlay = None
 
@@ -931,6 +964,12 @@ class ShellController:
                     self.records.apply_range()
                 self._notice("Search/Sort List deleted.")
             return
+        if action.startswith("delete-form:"):
+            letter = action.split(":", 1)[1]
+            if self._workspace() is not None:
+                self._workspace().delete_form(self._form_owner(), letter)
+                self._notice(f"Form {letter} erased.")
+            return
         if action.startswith("delete-set:"):
             name = action.split(":", 1)[1]
             if self._workspace() is not None:
@@ -1003,6 +1042,10 @@ class ShellController:
             self._field_rules_action(action)
         elif overlay.target == "sets":
             self._set_action(action)
+        elif overlay.target == "layouts":
+            self._layout_action(action)
+        elif overlay.target == "forms":
+            self._forms_action(action)
 
     def _design_action(self, action: str) -> None:
         if action == "create":
@@ -1039,6 +1082,63 @@ class ShellController:
                 action=f"erase:{self.database.name}")
         elif action == "password":
             self._prompt_password()
+
+    # -- layout/forms ----------------------------------------------------
+    def _form_owner(self) -> str:
+        return (self.active_set.name if self.active_set is not None
+                else (self.database.name if self.database is not None else ""))
+
+    def _layout_action(self, action: str) -> None:
+        if action == "forms":
+            self.overlay = Overlay("submenu", items=list(FORM_ITEMS),
+                                   target="forms")
+            return
+        self.overlay = None
+        self._notice(f"Layouts → {action} is not available yet (later wave).")
+
+    def _forms_action(self, action: str) -> None:
+        workspace = self._workspace()
+        owner = self._form_owner()
+        if workspace is None or not owner:
+            self._notice("Select a database or set first.")
+            return
+        if action == "create":
+            self.form_designer = FormDesigner(
+                workspace, self.database, owner=owner, theme=self.theme)
+            self.overlay = None
+            self.base = "formdesigner"
+            return
+        forms = workspace.forms(owner)
+        if action in ("select", "erase"):
+            if not forms:
+                self._notice("There are no forms for this database or set.")
+                return
+            items = [(form.label, form.letter) for form in forms]
+            self.overlay = Overlay(
+                "choose", text="Forms", items=items,
+                action="select-form" if action == "select" else "erase-form")
+            return
+
+    def _handle_form_designer(self, key: Key) -> None:
+        session = self.form_designer
+        assert session is not None
+        if key.name == "F1" and not key.alt and session.picker is None:
+            self._open_help("forms")
+            return
+        session.handle(key)
+        if session.close:
+            self._finish_form_designer()
+
+    def _finish_form_designer(self) -> None:
+        session = self.form_designer
+        self.form_designer = None
+        self.base = "menu"
+        if session is None:
+            return
+        if session.saved and session.saved_form is not None:
+            self._notice(f"Form {session.saved_form.letter} saved and active.")
+        elif session.status:
+            self._notice(session.status)
 
     # -- set -------------------------------------------------------------
     def _set_action(self, action: str) -> None:
@@ -1594,6 +1694,15 @@ class ShellController:
                 theme=self.theme)
             self.base = "setdesigner"
             return
+        if action in ("select-form", "erase-form"):
+            if action == "select-form":
+                self._workspace().set_active_form(self._form_owner(), value)
+                self._notice(f"Form {value} is now active.")
+            else:
+                self.overlay = Overlay(
+                    "confirm", text=f"Erase form {value}?",
+                    action=f"delete-form:{value}")
+            return
         if action == "erase-set":
             self.overlay = Overlay(
                 "confirm", text=f"Erase set {value}?",
@@ -1973,6 +2082,10 @@ class ShellController:
         self._open_entry(path)
 
     def _to_main_menu(self) -> None:
+        if self.base == "formdesigner" and self.overlay is None:
+            self.form_designer = None
+            self.base = "menu"
+            return
         if self.base in ("setrecords", "setdesigner") and self.overlay is None:
             if self.base == "setrecords":
                 self.set_records = None
