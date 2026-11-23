@@ -14,9 +14,13 @@ su Linux, Windows e macOS.
 - Diario di implementazione: [`DIARIO.md`](DIARIO.md)
 - Inventario funzionale estratto dai manuali:
   [`docs/reference/00-inventario.md`](docs/reference/00-inventario.md)
+- Manuali originali (documentazione proprietaria, solo consultazione):
+  [`docs/reference/manuals/`](docs/reference/manuals/)
 - Specifiche: motore a celle [`docs/spec/00-motore-celle.md`](docs/spec/00-motore-celle.md),
   scalabilità [`docs/spec/01-scalabilita.md`](docs/spec/01-scalabilita.md),
-  shell [`docs/spec/02-shell.md`](docs/spec/02-shell.md)
+  shell [`docs/spec/02-shell.md`](docs/spec/02-shell.md),
+  ambiente DOS di riferimento
+  [`docs/spec/03-ambiente-dos-riferimento.md`](docs/spec/03-ambiente-dos-riferimento.md)
 - Schermate: [`docs/render/`](docs/render/)
 
 ## Perché una griglia di caratteri
@@ -50,6 +54,28 @@ Manual`, 25 capitoli e 8 appendici; `Tutorial Manual`, 25 lezioni). Il
 riassunto operativo, con limiti, funzioni, comandi di script, trigger, tasti
 ed estensioni di file, è in `docs/reference/00-inventario.md`.
 
+## Riferimento originale in DOSBox-X
+
+L'originale si può avviare senza installare il DOS, per confrontare
+comportamenti e schermate:
+
+```bash
+sudo apt-get install dosbox-x
+tools/run_alpha4_dosbox.sh           # estrae da DRIVEC TERZA VERSIONE.zip e avvia
+```
+
+Verificato: DOSBox-X 2026.01.02, macchina `svga_s3`, 16 MB, `A4.EXE` arriva
+al main menu con `AVMOVIES` (50 record). Dettagli e screenshot in
+[`docs/spec/03-ambiente-dos-riferimento.md`](docs/spec/03-ambiente-dos-riferimento.md).
+L'archivio DOS e i suoi file restano fuori dal repository.
+
+## Licenza dei materiali di riferimento
+
+Codice e documentazione prodotta sono MIT. I PDF in
+`docs/reference/manuals/` sono manuali Alpha Software depositati **solo per
+consultazione** e non sono coperti dalla licenza MIT. I file del programma
+originale non sono inclusi.
+
 Alpha Four è un marchio di Alpha Software Corporation. Questo progetto è una
 reimplementazione indipendente, non affiliata né autorizzata; non contiene
-codice, binari o testi originali.
+codice o binari originali.

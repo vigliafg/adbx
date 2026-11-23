@@ -241,3 +241,32 @@ Formato:
     la proporzione non è replicabile senza deformare il carattere.
   - Palette colori ancora provvisoria (O12); tema unico `newport`.
 - Prossimo passo: O2 — Dati e immissione.
+
+---
+
+### 2026-11-23 — Riferimenti — Manuali originali e ambiente DOSBox-X
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: avere i manuali originali nel repository per la consultazione e
+  poter eseguire Alpha Four v3 vero per confrontare schermate e tasti.
+- File toccati: `docs/reference/manuals/` (tre PDF e `README.md`),
+  `docs/spec/03-ambiente-dos-riferimento.md`,
+  `docs/render/06-alpha-four-dosbox.png`, `tools/run_alpha4_dosbox.sh`,
+  `README.md`, `DIARIO.md`.
+- Scelte:
+  - I PDF sono copiati dall'archivio di famiglia con nomi parlanti e hash
+    SHA-256; restano documentazione proprietaria, non MIT, e il repository
+    contiene un avviso esplicito. I file del programma (`A4.EXE`, dati) non
+    entrano in git.
+  - DOSBox-X installato da Ubuntu (`2026.01.02+dfsg-2`). Lo script cerca
+    l'archivio `DRIVEC TERZA VERSIONE.zip`, estrae `drivec/` nella cache
+    utente (`$XDG_CACHE_HOME/adbx/alpha4-dos`), genera la configurazione e
+    monta la cartella come `C:`.
+  - Configurazione verificata: `svga_s3`, 16 MB, EMS/XMS attivi, cicli
+    automatici. `A4.EXE` parte e arriva al main menu con `AVMOVIES`
+    (50 record, 12 nella lista); nessun errore di memoria.
+- Test: avvio sotto Xvfb con cattura `scrot`; screenshot nel repository.
+- Problemi aperti: il DOSBox mostra il main menu 80×25, mentre adbx usa
+  132×43; il confronto è funzionale, non pixel a pixel.
+- Prossimo passo: completare O2 (dati e immissione) e usare DOSBox-X per
+  verificare le lezioni 2, 4, 5 e 6.
