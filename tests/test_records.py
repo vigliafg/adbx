@@ -231,7 +231,7 @@ def test_password_prompt_preserves_case(tmp_path):
     path = _create_database(tmp_path, [Field("NAME", "C", 20)])
     controller = _open(path)
     controller.handle(Key("D"))
-    for _ in range(4):  # Password
+    for _ in range(5):  # Password
         controller.handle(Key("DOWN"))
     controller.handle(Key("ENTER"))
     assert controller.overlay.kind == "prompt"

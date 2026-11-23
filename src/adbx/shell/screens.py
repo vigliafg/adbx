@@ -99,7 +99,8 @@ def _write_hot(buffer: CellBuffer, row: int, col: int, label: str, *,
 
 def _status_box(buffer: CellBuffer, state: ShellState, theme: Theme) -> None:
     buffer.fill_rect(0, 0, 2, SCREEN_WIDTH, " ", fg=theme.text, bg=theme.bg)
-    buffer.write(0, 1, "Current database", fg=theme.label, bg=theme.bg)
+    buffer.write(0, 1, "Current set" if state.set_name else "Current database",
+                 fg=theme.label, bg=theme.bg)
     buffer.write(0, 18, ":", fg=theme.label, bg=theme.bg)
     buffer.write(0, 20, clip_text(state.current_path_text, 60),
                  fg=theme.text, bg=theme.bg, bold=True)

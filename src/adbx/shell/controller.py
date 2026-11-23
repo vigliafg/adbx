@@ -26,6 +26,7 @@ from .indexes import IndexSession, RangeSession
 from .records import RecordSession
 from .rules import RulesSession
 from .searching import SearchSession
+from .sets import SetDesigner, SetSession
 from .state import ShellState, default_root, demo_state
 from .theme import NEWPORT, Theme
 from .widgets import View
@@ -37,6 +38,7 @@ LIST_VISIBLE = STATUS_ROW - LIST_TOP
 
 DESKTOP_ITEMS: tuple[tuple[str, str | None], ...] = (
     ("Open a database", "open"),
+    ("Open a set", "open-set"),
     ("Switch databases", "switch"),
     ("Close a database", "close"),
     ("Save current desktop", "save"),
@@ -66,8 +68,15 @@ DESIGN_ITEMS: tuple[tuple[str, str], ...] = (
     ("Create database", "create"),
     ("Modify database", "modify"),
     ("Field rules", "field-rules"),
+    ("Set commands", "sets"),
     ("Erase database", "erase"),
     ("Password", "password"),
+)
+
+SET_ITEMS: tuple[tuple[str, str], ...] = (
+    ("Create a set design", "create"),
+    ("Modify a set design", "modify"),
+    ("Erase a set design", "erase"),
 )
 
 RULES_ITEMS: tuple[tuple[str, str], ...] = (
@@ -160,6 +169,9 @@ class ShellController:
         self.range_session: RangeSession | None = None
         self.search_session: SearchSession | None = None
         self.rules_session: RulesSession | None = None
+        self.active_set = None
+        self.set_records: SetSession | None = None
+        self.set_designer: SetDesigner | None = None
         self.pending_index_name = ""
         self.pending_locate_text = ""
         self.pending_replace: list[str] = []
@@ -189,6 +201,10 @@ class ShellController:
             base = self.search_session.view()
         elif self.base == "rules" and self.rules_session is not None:
             base = self.rules_session.view()
+        elif self.base == "setrecords" and self.set_records is not None:
+            base = self.set_records.view()
+        elif self.base == "setdesigner" and self.set_designer is not None:
+            base = self.set_designer.view()
         elif self.base == "directory":
             base = screens.directory(
                 self.state, self.cursor, self.input_text, self.input_cursor,
@@ -227,6 +243,7 @@ class ShellController:
                 "index-mode": "Create an Index",
                 "other": "Other",
                 "field-rules": "Field Rules",
+                "sets": "Set Commands",
             }.get(overlay.target, "Desktop Options")
             items = overlay.items or list(DESKTOP_ITEMS)
             return screens.submenu_overlay(base, items, overlay.selected,
@@ -274,6 +291,10 @@ class ShellController:
             self._handle_search_session(key)
         elif self.base == "rules":
             self._handle_rules_session(key)
+        elif self.base == "setrecords":
+            self._handle_set_records(key)
+        elif self.base == "setdesigner":
+            self._handle_set_designer(key)
         elif self.base == "directory":
             self._handle_directory(key)
         elif self.base == "structure":
@@ -510,7 +531,14 @@ class ShellController:
     def _open_entry(self, path: Path) -> None:
         ext = path.suffix.lstrip(".").upper()
         if ext == "SET":
-            self._notice("Sets are not available yet (wave O5).")
+            workspace = Workspace(path.parent)
+            self.workspace = workspace
+            if self._activate_set(path.stem.upper()):
+                self.state.change_directory(path.parent)
+                self.base = "menu"
+                self.menu_index = 0
+                self.overlay = None
+                self._sync_input()
             return
         try:
             current = self.state.open(path)
@@ -532,6 +560,8 @@ class ShellController:
             self._notice(f"Opened {current.name} (record count unavailable).")
 
     def _open_database(self, path: Path) -> Database | None:
+        self.active_set = None
+        self.state.set_name = ""
         try:
             workspace = Workspace(path.parent)
             database = workspace.open_database(path)
@@ -671,6 +701,11 @@ class ShellController:
             show_deleted = True
         else:
             show_deleted = False
+        if self.active_set is not None:
+            self.set_records = SetSession(self.active_set, mode, self.theme)
+            self.base = "setrecords"
+            self.overlay = None
+            return
         self.records = RecordSession(self.database, mode, self.theme,
                                      clipboard=self.clipboard,
                                      show_deleted=show_deleted)
@@ -696,6 +731,8 @@ class ShellController:
         self.base = "menu"
         if self.database is not None:
             self.state.database = self.database
+        self.state.set_name = (self.active_set.name
+                               if self.active_set is not None else "")
 
     def _open_designer(self, database: Database | None,
                        name: str | None = None) -> None:
@@ -894,6 +931,15 @@ class ShellController:
                     self.records.apply_range()
                 self._notice("Search/Sort List deleted.")
             return
+        if action.startswith("delete-set:"):
+            name = action.split(":", 1)[1]
+            if self._workspace() is not None:
+                self._workspace().delete_set(name)
+                if self.active_set is not None and self.active_set.name == name:
+                    self.active_set = None
+                    self.state.set_name = ""
+                self._notice(f"Set {name} erased.")
+            return
         if action == "erase-field-rules":
             if self.database is not None:
                 self.database.clear_field_rules()
@@ -955,10 +1001,20 @@ class ShellController:
             self._start_index_session(action)
         elif overlay.target == "field-rules":
             self._field_rules_action(action)
+        elif overlay.target == "sets":
+            self._set_action(action)
 
     def _design_action(self, action: str) -> None:
         if action == "create":
             self._prompt_create()
+            return
+        if action == "sets":
+            if self.database is None:
+                self.overlay = None
+                self._notice("Select a database first.")
+                return
+            self.overlay = Overlay("submenu", items=list(SET_ITEMS),
+                                   target="sets")
             return
         if action == "field-rules":
             if self.database is None:
@@ -983,6 +1039,120 @@ class ShellController:
                 action=f"erase:{self.database.name}")
         elif action == "password":
             self._prompt_password()
+
+    # -- set -------------------------------------------------------------
+    def _set_action(self, action: str) -> None:
+        workspace = self._workspace()
+        if workspace is None:
+            self._notice("Open a database first.")
+            return
+        if action == "create":
+            self.set_designer = SetDesigner(workspace, self.database,
+                                            theme=self.theme)
+            self.overlay = None
+            self.base = "setdesigner"
+            return
+        if action == "modify":
+            items = [(name, name) for name in workspace.set_names()]
+            if not items:
+                self._notice("There are no sets in this directory.")
+                return
+            self.overlay = Overlay("choose", text="Sets", items=items,
+                                   action="modify-set")
+            return
+        if action == "erase":
+            items = [(name, name) for name in workspace.set_names()]
+            if not items:
+                self._notice("There are no sets in this directory.")
+                return
+            self.overlay = Overlay("choose", text="Erase a set", items=items,
+                                   action="erase-set")
+
+    def _workspace(self):
+        if self.workspace is None and self.database is not None:
+            self.workspace = self.database.workspace
+        return self.workspace
+
+    def _activate_set(self, name: str) -> bool:
+        workspace = self._workspace()
+        if workspace is None:
+            return False
+        definition = workspace.get_set(name)
+        if definition is None:
+            self._notice(f"Set {name} not found.")
+            return False
+        try:
+            primary = definition.primary_database
+        except Exception as exc:
+            self._notice(str(exc))
+            return False
+        self.active_set = definition
+        self.database = primary
+        self.state.database = primary
+        self.state.set_name = definition.name
+        self.state.current = None
+        self.state.database = primary
+        self.base = "menu"
+        self.overlay = None
+        self._sync_input()
+        return True
+
+    def _choose_desktop(self, action: str) -> None:
+        workspace = self._workspace()
+        if workspace is None:
+            self._notice("Open a database first.")
+            return
+        items = [(name, name) for name in workspace.names()]
+        if action == "open-set":
+            items = [(name, name) for name in workspace.set_names()]
+            if not items:
+                self._notice("There are no sets in this directory.")
+                return
+            self.overlay = Overlay("choose", text="Open a set", items=items,
+                                   action="open-set")
+            return
+        if action == "switch":
+            items += [(f"{name} (set)", f"SET:{name}")
+                      for name in workspace.set_names()]
+            self.overlay = Overlay("choose", text="Open Databases/Sets",
+                                   items=items, action="switch")
+
+    def _handle_set_designer(self, key: Key) -> None:
+        session = self.set_designer
+        assert session is not None
+        if key.name == "F1" and not key.alt \
+                and session.integrity_editor is None:
+            self._open_help("sets")
+            return
+        session.handle(key)
+        if session.close:
+            self._finish_set_designer()
+
+    def _finish_set_designer(self) -> None:
+        session = self.set_designer
+        self.set_designer = None
+        self.base = "menu"
+        if session is None:
+            return
+        if session.saved and session.saved_definition is not None:
+            self.active_set = session.saved_definition
+            self.database = session.saved_definition.primary_database
+            self.state.database = self.database
+            self.state.set_name = session.saved_definition.name
+            self._notice("Set saved.")
+        elif session.status:
+            self._notice(session.status)
+
+    def _handle_set_records(self, key: Key) -> None:
+        session = self.set_records
+        assert session is not None
+        if key.name == "F1" and not key.alt and session.zoom is None:
+            self._open_help("sets")
+            return
+        session.handle(key)
+        if session.close:
+            self.set_records = None
+            self.base = "menu"
 
     # -- field rules -----------------------------------------------------
     def _field_rules_action(self, action: str) -> None:
@@ -1408,6 +1578,27 @@ class ShellController:
         action = overlay.action
         self.overlay = None
         database = self.database
+        if action in ("open-set", "modify-set", "switch"):
+            name = value
+            if value.startswith("SET:"):
+                self._activate_set(value.split(":", 1)[1])
+                return
+            if action == "open-set":
+                self._activate_set(name)
+                return
+            definition = self._workspace().get_set(name) if self._workspace() else None
+            if definition is None:
+                return
+            self.set_designer = SetDesigner(
+                definition.workspace, self.database, definition=definition,
+                theme=self.theme)
+            self.base = "setdesigner"
+            return
+        if action == "erase-set":
+            self.overlay = Overlay(
+                "confirm", text=f"Erase set {value}?",
+                action=f"delete-set:{value}")
+            return
         if database is None:
             return
         if action == "set-primary":
@@ -1740,6 +1931,19 @@ class ShellController:
                     self._open_help(spans[overlay.link].target, push=True)
 
     def _desktop_action(self, action: str) -> None:
+        if action in ("open-set", "switch"):
+            self._choose_desktop(action)
+            return
+        if action == "close":
+            self.active_set = None
+            self.database = None
+            self.state.database = None
+            self.state.set_name = ""
+            self.state.current = None
+            self.base = "directory"
+            self.overlay = None
+            self._notice("Database closed.")
+            return
         if action == "open":
             self.overlay = None
             if self.state.current is not None:
@@ -1769,6 +1973,13 @@ class ShellController:
         self._open_entry(path)
 
     def _to_main_menu(self) -> None:
+        if self.base in ("setrecords", "setdesigner") and self.overlay is None:
+            if self.base == "setrecords":
+                self.set_records = None
+            else:
+                self.set_designer = None
+            self.base = "menu"
+            return
         if self.base == "rules" and self.overlay is None:
             if self.rules_session is not None:
                 self.rules_session.close = True

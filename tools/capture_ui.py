@@ -24,6 +24,7 @@ from adbx.data import indexing  # noqa: E402
 from adbx.data.expressions import SearchRow  # noqa: E402
 from adbx.data.fields import Field  # noqa: E402
 from adbx.data.rules import FieldRule, LookupTable, PostingRule  # noqa: E402
+from adbx.data.sets import Link, SetDefinition  # noqa: E402
 from adbx.data.workspace import Workspace  # noqa: E402
 from adbx.render.qt_renderer import CellRenderer  # noqa: E402
 from adbx.shell import screens  # noqa: E402
@@ -36,6 +37,7 @@ from adbx.shell.rules import (  # noqa: E402
     RulesSession,
 )
 from adbx.shell.searching import SearchSession  # noqa: E402
+from adbx.shell.sets import SetDesigner, SetSession  # noqa: E402
 from adbx.shell.state import demo_state  # noqa: E402
 
 
@@ -147,6 +149,47 @@ def main(argv: list[str] | None = None) -> int:
             PostingRule("STOCK", "QOH", "Subtract", "", "",
                         linking_index="STOCKCOD", common="TAPE_ID")],
             database=database)
+
+        header = workspace.create_database("AVHEADER", [
+            Field("INV_NO", "C", 6), Field("CUST_ID", "C", 6),
+            Field("INV_DATE", "D", 8)])
+        patrons = workspace.create_database("AVPATRON", [
+            Field("CUST_ID", "C", 6), Field("NAME", "C", 20),
+            Field("CITY", "C", 15)])
+        items = workspace.create_database("AVITEMS", [
+            Field("INV_NO", "C", 6), Field("TAPE_ID", "C", 6),
+            Field("QUANTITY", "N", 3, 0)])
+        indexing.save_index(patrons, indexing.IndexDefinition(
+            "AVPATID", "CUST_ID"))
+        indexing.save_index(items, indexing.IndexDefinition(
+            "AVINVNO", "INV_NO"))
+        indexing.save_index(database, indexing.IndexDefinition(
+            "AVMOVTAP", "TAPE_ID"))
+        patrons.append({"CUST_ID": "1001", "NAME": "Ada", "CITY": "Rome"})
+        header.append({"INV_NO": "A015", "CUST_ID": "1001",
+                       "INV_DATE": "19930505"})
+        items.append({"INV_NO": "A015", "TAPE_ID": "1006", "QUANTITY": "1"})
+        items.append({"INV_NO": "A015", "TAPE_ID": "1007", "QUANTITY": "2"})
+        set_definition = SetDefinition(
+            workspace, "AVIDEO", "Alpha Video Invoicing", "AVHEADER")
+        set_definition.links = [
+            Link("AVHEADER", "AVPATRON", "AVPATID", "CUST_ID", "First"),
+            Link("AVHEADER", "AVITEMS", "AVINVNO", "INV_NO", "All",
+                 referential=True, cascading_updates=True,
+                 cascading_deletes=True),
+            Link("AVITEMS", "AVMOVIES", "AVMOVTAP", "TAPE_ID", "First",
+                 edit_child="No", add_child="No"),
+        ]
+        set_definition.save()
+        set_designer = SetDesigner(
+            workspace, header, definition=set_definition)
+        set_designer.stage = "editor"
+        set_designer.window = "bottom"
+        set_designer.selected = 2
+        set_designer.row = 3
+        set_designer._load_row()
+        set_view = SetSession(set_definition, "view")
+        set_browse = SetSession(set_definition, "browse")
         lookup_record = RecordSession(database, "enter")
         lookup_record.field_index = 3
         lookup_record._load_field()
@@ -176,6 +219,9 @@ def main(argv: list[str] | None = None) -> int:
             "15-lookup-table": lookup_editor.view(),
             "16-lookup-choices": lookup_record.view(),
             "17-posting-rules": posting_editor.view(),
+            "18-set-editor": set_designer.view(),
+            "19-set-view": set_view.view(),
+            "20-set-browse": set_browse.view(),
         }
         for name, view in shots.items():
             image = renderer.to_image(view.buffer)

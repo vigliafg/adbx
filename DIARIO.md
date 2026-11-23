@@ -434,3 +434,49 @@ Formato:
   - Le regole non sono scritte in `.RLN`; vivono nel workspace SQLite.
   - Un campo calcolato mostra nell'editor anche regole che il motore non usa.
 - Prossimo passo: O5 — Set e regioni.
+
+---
+
+### 2026-11-23 — Ondata O5 — Set e regioni
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: collegare più database in un set, definire link e integrità,
+  consultare i dati combinati con una regione uno-a-molti e lo zoom.
+- File toccati: nuovi `src/adbx/data/sets.py` (definizione, persistenza,
+  risoluzione link, closest, integrità, cascading),
+  `src/adbx/shell/sets.py` (Set Editor, integrity mapping, SetSession),
+  specifica `docs/spec/07-set.md`, screenshot `18-set-editor.png`,
+  `19-set-view.png`, `20-set-browse.png`; aggiornati
+  `src/adbx/data/workspace.py` (tabelle `adbx_sets`/`adbx_set_links`,
+  pulizia dei set alla cancellazione di un database), `controller.py`
+  (Set commands, Open a set, switch/close, sessioni set), `state.py`,
+  `screens.py`, `help.py`, `README.md`, `tools/capture_ui.py`; test nuovi
+  `test_sets`, `test_sets_ui`.
+- Scelte:
+  - **Definizione in SQLite**, non file `.SET`: primario, descrizione,
+    show/filter e link con indice, campo comune, modalità, integrità,
+    include parent e opzioni di editing.
+  - **Motore in memoria**: i link risolvono i record del figlio nell'ordine
+    dell'indice; `First/Last/All` e `Closest` (prima chiave successiva).
+    Nessuna copia dei dati.
+  - **Referential integrity**: mappa di integrità di default sui campi
+    omonimi (più il campo comune), personalizzabile con F7; cascading update
+    e delete/undelete riscrivono i `.DBF` coinvolti.
+  - **Set Editor** a due finestre, con F6 add link, F5 detach, F7 integrity,
+    F9 switch e F10 save. Limiti verificati: 10 database, un solo `All` per
+    genitore, endpoint raggiungibili, indici esistenti.
+  - **SetSession** per View/Browse/Enter/Change: campi combinati primario +
+    figli 1:1, regione 1:N con F6 e zoom Alt-Z, cascata su delete, salvataggio
+    del genitore e dei figli modificabili, regole del primario.
+- Test: **252 passed**; `uvx ruff check src tests tools` pulito;
+  `./start.sh --smoke` e `--version` verdi. Accettazione set in
+  `test_sets_ui`; motore in `test_sets` (closest, cascading, filtri,
+  include parent, limiti).
+- Problemi aperti / deviazioni dichiarate:
+  - I set non sono file `.SET` reali; vivono nel workspace SQLite.
+  - Il form designer e le regioni personalizzate arrivano con O6; la regione
+    figli usa un layout predefinito.
+  - I figli 1:1 annidati non compaiono nel form combinato (solo zoom/O6).
+  - `Prompt` sull'aggiunta di figli è trattato come `Yes`.
+  - Enter/Change applica le regole del primario, non quelle dei figli.
+- Prossimo passo: O6 — Form designer.

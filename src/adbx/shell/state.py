@@ -38,6 +38,7 @@ class ShellState:
     detail: bool = False
     current: CurrentFile | None = None
     database: "Database | None" = None
+    set_name: str = ""
     history: list[Path] = field(default_factory=list)
     listing: Listing | None = None
 
@@ -87,10 +88,14 @@ class ShellState:
     # -- stato per le schermate -----------------------------------------
     @property
     def current_name(self) -> str:
+        if self.set_name:
+            return self.set_name
         return self.current.name if self.current else ""
 
     @property
     def current_path_text(self) -> str:
+        if self.set_name:
+            return str(self.root / f"{self.set_name}.SET")
         return str(self.current.path) if self.current else "(none)"
 
     @property

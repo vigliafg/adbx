@@ -386,6 +386,36 @@ class Workspace:
                 range_json TEXT NOT NULL DEFAULT '{}',
                 def_version INTEGER NOT NULL DEFAULT 0
             );
+            CREATE TABLE IF NOT EXISTS adbx_sets (
+                name TEXT PRIMARY KEY,
+                description TEXT NOT NULL DEFAULT '',
+                primary_database TEXT NOT NULL,
+                show_mode TEXT NOT NULL DEFAULT 'not_deleted',
+                filter TEXT NOT NULL DEFAULT '',
+                filter_active INTEGER NOT NULL DEFAULT 0,
+                created REAL NOT NULL,
+                updated REAL NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS adbx_set_links (
+                set_name TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                parent TEXT NOT NULL,
+                child TEXT NOT NULL,
+                linking_index TEXT NOT NULL DEFAULT '',
+                common TEXT NOT NULL DEFAULT '',
+                link_to TEXT NOT NULL DEFAULT 'First',
+                edit_child TEXT NOT NULL DEFAULT 'Yes',
+                add_child TEXT NOT NULL DEFAULT 'Yes',
+                referential INTEGER NOT NULL DEFAULT 0,
+                cascading_updates INTEGER NOT NULL DEFAULT 0,
+                cascading_deletes INTEGER NOT NULL DEFAULT 0,
+                include_parent TEXT NOT NULL DEFAULT 'Always',
+                show_mode TEXT NOT NULL DEFAULT 'not_deleted',
+                filter TEXT NOT NULL DEFAULT '',
+                filter_active INTEGER NOT NULL DEFAULT 0,
+                integrity TEXT NOT NULL DEFAULT '[]',
+                PRIMARY KEY (set_name, position)
+            );
             CREATE TABLE IF NOT EXISTS adbx_field_rules (
                 owner TEXT NOT NULL,
                 field TEXT NOT NULL,
@@ -488,6 +518,74 @@ class Workspace:
             "WHERE database = ?",
             (json.dumps(settings.to_dict()), settings.primary, name))
         self._connection.commit()
+
+    # -- set -------------------------------------------------------------
+    def set_names(self) -> list[str]:
+        return [str(row[0]) for row in self._connection.execute(
+            "SELECT name FROM adbx_sets ORDER BY name")]
+
+    def get_set(self, name: str):
+        from .sets import _set_from_row
+
+        row = self._connection.execute(
+            "SELECT * FROM adbx_sets WHERE name = ?",
+            (name.strip().upper(),)).fetchone()
+        if row is None:
+            return None
+        return _set_from_row(self, row)
+
+    def save_set(self, definition) -> None:
+        import json
+
+        now = time.time()
+        created = definition.created or now
+        self._connection.execute(
+            "INSERT INTO adbx_sets (name, description, primary_database, "
+            "show_mode, filter, filter_active, created, updated) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(name) DO UPDATE SET description = excluded.description, "
+            "primary_database = excluded.primary_database, "
+            "show_mode = excluded.show_mode, filter = excluded.filter, "
+            "filter_active = excluded.filter_active, updated = excluded.updated",
+            (definition.name, definition.description, definition.primary,
+             definition.show_mode, definition.filter,
+             1 if definition.filter_active else 0, created, now))
+        self._connection.execute(
+            "DELETE FROM adbx_set_links WHERE set_name = ?", (definition.name,))
+        for position, link in enumerate(definition.links):
+            link.normalize()
+            self._connection.execute(
+                "INSERT INTO adbx_set_links (set_name, position, parent, child, "
+                "linking_index, common, link_to, edit_child, add_child, "
+                "referential, cascading_updates, cascading_deletes, "
+                "include_parent, show_mode, filter, filter_active, integrity) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (definition.name, position, link.parent, link.child,
+                 link.linking_index, link.common, link.link_to,
+                 link.edit_child, link.add_child,
+                 1 if link.referential else 0,
+                 1 if link.cascading_updates else 0,
+                 1 if link.cascading_deletes else 0, link.include_parent,
+                 link.show_mode, link.filter,
+                 1 if link.filter_active else 0,
+                 json.dumps([[parent, child]
+                             for parent, child in link.integrity])))
+        self._connection.commit()
+        definition.created = created
+        definition.updated = now
+
+    def delete_set(self, name: str) -> bool:
+        name = name.strip().upper()
+        if self.get_set(name) is None:
+            return False
+        self._connection.execute(
+            "DELETE FROM adbx_set_links WHERE set_name = ?", (name,))
+        self._connection.execute(
+            "DELETE FROM adbx_sets WHERE name = ?", (name,))
+        self._connection.execute(
+            "DELETE FROM adbx_field_rules WHERE owner = ?", (name,))
+        self._connection.commit()
+        return True
 
     # -- regole di campo -------------------------------------------------
     def field_rules(self, owner: str) -> dict:
@@ -764,6 +862,17 @@ class Workspace:
         self._connection.execute("DELETE FROM adbx_searches WHERE database = ?", (name,))
         self._connection.execute("DELETE FROM adbx_search_lists WHERE database = ?", (name,))
         self._connection.execute("DELETE FROM adbx_field_rules WHERE owner = ?", (name,))
+        for set_row in self._connection.execute(
+                "SELECT name, primary_database FROM adbx_sets"):
+            if str(set_row["primary_database"]) == name or any(
+                    str(link_row[0]) == name for link_row in self._connection.execute(
+                        "SELECT child FROM adbx_set_links WHERE set_name = ?",
+                        (set_row["name"],))):
+                self._connection.execute(
+                    "DELETE FROM adbx_set_links WHERE set_name = ?",
+                    (set_row["name"],))
+                self._connection.execute(
+                    "DELETE FROM adbx_sets WHERE name = ?", (set_row["name"],))
         self._connection.commit()
         if database.origin == "created" and database.source.parent == self.directory:
             try:

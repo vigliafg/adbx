@@ -9,7 +9,7 @@ finestra con una griglia di caratteri scalabile (132×43, font TrueType), su un 
 su Linux, Windows e macOS.
 
 - Licenza: MIT
-- Stato: **O4 completata** — regole di campo, lookup table/database, cascading, conditional e post data
+- Stato: **O5 completata** — set con link, integrità referenziale, cascading, regioni e zoom
 - Piano completo: [`PLAN.md`](PLAN.md)
 - Diario di implementazione: [`DIARIO.md`](DIARIO.md)
 - Inventario funzionale estratto dai manuali:
@@ -22,6 +22,7 @@ su Linux, Windows e macOS.
   dati e immissione [`docs/spec/04-dati-immissione.md`](docs/spec/04-dati-immissione.md),
   ricerca e indici [`docs/spec/05-ricerca-indici.md`](docs/spec/05-ricerca-indici.md),
   regole di campo [`docs/spec/06-regole-campo.md`](docs/spec/06-regole-campo.md),
+  set e regioni [`docs/spec/07-set.md`](docs/spec/07-set.md),
   ambiente DOS di riferimento
   [`docs/spec/03-ambiente-dos-riferimento.md`](docs/spec/03-ambiente-dos-riferimento.md)
 - Schermate: [`docs/render/`](docs/render/)
@@ -70,6 +71,14 @@ skip, prompt, post data e lookup. Le lookup possono essere tabelle (fino a 6
 colonne), database con mapping, cascate ad albero o liste condizionali;
 `F3` apre le scelte durante l'immissione e riempie i campi collegati.
 `Re-evaluate field rules` applica calcoli e maiuscole ai record esistenti.
+
+Con **O5** più database diventano una sola vista: `Set commands` crea set con
+fino a 10 database, link `First/Last/Closest/All`, indice di collegamento e
+campo comune, integrità referenziale con cascading updates/deletes e
+`Include Parent If`. `View/enter records` su un set combina primario e figli
+uno-a-uno, mostra i figli uno-a-molti in una regione dedicata (F6) e permette
+lo zoom sul figlio (`Alt-Z`). Enter/Change aggiornano il genitore e i figli
+modificabili; il delete cascata sui figli collegati.
 
 ## Riferimenti
 
