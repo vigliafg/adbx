@@ -380,3 +380,57 @@ Formato:
     selezionare, aggiornare, cancellare).
   - Il range predefinito mostra i non cancellati invece di All.
 - Prossimo passo: O4 — Field rules (lookup, cascading, conditional, post).
+
+---
+
+### 2026-11-23 — Ondata O4 — Regole di campo
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: rendere il database dichiarativo con le regole del capitolo 10:
+  valori calcolati, default, incrementi, maschere, validazioni, doppia
+  immissione, skip, post data e lookup (tabella, database, cascata,
+  condizioni).
+- File toccati: nuovo `src/adbx/data/rules.py` (motore puro),
+  `src/adbx/shell/rules.py` (editor a due finestre e grid editor), specifica
+  `docs/spec/06-regole-campo.md`, screenshot `14-field-rules.png`,
+  `15-lookup-table.png`, `16-lookup-choices.png`, `17-posting-rules.png`;
+  aggiornati `src/adbx/data/workspace.py` (tabella `adbx_field_rules`,
+  migrazione alla rinomina dei campi), `src/adbx/shell/records.py`
+  (default, calcolati, maschere, template, required, validation, double
+  entry, skip, auto-advance, lookup F3, post al salvataggio),
+  `record_screens.py` (popup lookup e prompt), `controller.py`
+  (sottomenu Field rules, re-evaluate, erase), `help.py`, `README.md`,
+  `tools/capture_ui.py`; test nuovi `test_rules`, `test_field_rules_ui`,
+  `test_field_rules_entry` e aggiornato `test_records` per il nuovo indice
+  del menu Password.
+- Scelte:
+  - **Regole in SQLite** (`adbx_field_rules`), non in `database.RLN`: il
+    `.DBF` resta interoperabile, le regole no. La tabella usa `owner` per
+    essere pronta al livello set di O5.
+  - **Risoluzione set/database** del manuale: se il set definisce una regola
+    per un campo, quella di database viene ignorata per intero, non fusa.
+  - **Motore puro** in `data/rules.py`: default, incrementi base 36,
+    template/maschere, required, validation, double entry, skip, calcolati
+    con passaggi multipli, lookup table/database/cascata/condizionali, post
+    data con differenza su modifica, re-evaluate.
+  - **Editor** a due finestre con tre pagine; F7 apre l'editor giusto per
+    tabella, mapping, cascata o condizioni; F8 le regole di post; F5 cancella
+    le regole del campo; F10 salva.
+  - **Data entry**: il cursore salta calcolati e campi con skip; i default e
+    gli incrementi `Records` sono applicati alla nascita del record; F3 apre
+    la lookup e riempie i campi collegati; il salvataggio esegue required,
+    validation, maschere, lookup validation, incrementi `Updates` e post.
+  - **Popup lookup** rispetta `Location`, `Rows in Window` e `Auto Pop-up`;
+    le cascate mostrano un livello alla volta con `LEFT` per risalire.
+- Test: **234 passed**; `uvx ruff check src tests tools` pulito;
+  `./start.sh --smoke` e `--version` verdi. Accettazione lezioni 11–13 in
+  `test_field_rules_ui`; motore in `test_rules`; integrazione in
+  `test_field_rules_entry`.
+- Problemi aperti / deviazioni dichiarate:
+  - `Summary` è solo per i set e non è calcolato (O5).
+  - L'`Exit expression` dell'auto popup non è ancora usata; `Entry` sì.
+  - Il post data esterno aggiorna il primo record; il post verso un figlio
+    1:N arriverà con i set (O5).
+  - Le regole non sono scritte in `.RLN`; vivono nel workspace SQLite.
+  - Un campo calcolato mostra nell'editor anche regole che il motore non usa.
+- Prossimo passo: O5 — Set e regioni.

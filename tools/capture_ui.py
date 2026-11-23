@@ -23,12 +23,18 @@ from PyQt6.QtGui import QGuiApplication  # noqa: E402
 from adbx.data import indexing  # noqa: E402
 from adbx.data.expressions import SearchRow  # noqa: E402
 from adbx.data.fields import Field  # noqa: E402
+from adbx.data.rules import FieldRule, LookupTable, PostingRule  # noqa: E402
 from adbx.data.workspace import Workspace  # noqa: E402
 from adbx.render.qt_renderer import CellRenderer  # noqa: E402
 from adbx.shell import screens  # noqa: E402
 from adbx.shell.designer import DesignerSession  # noqa: E402
 from adbx.shell.indexes import IndexSession, RangeSession  # noqa: E402
 from adbx.shell.records import RecordSession  # noqa: E402
+from adbx.shell.rules import (  # noqa: E402
+    LookupTableEditor,
+    PostingEditor,
+    RulesSession,
+)
 from adbx.shell.searching import SearchSession  # noqa: E402
 from adbx.shell.state import demo_state  # noqa: E402
 
@@ -117,6 +123,35 @@ def main(argv: list[str] | None = None) -> int:
             database,
             search_rows=[SearchRow("RATING", "=", "G")],
             description="Rated G")
+        lookup_table = LookupTable(
+            columns=["RATING"],
+            rows=[["Children's", "G"], ["Action/Adventure", "PG"],
+                  ["Drama", "G"], ["Comedy", "PG"]])
+        database.save_field_rule(FieldRule(
+            "SUBJECT", lookup=True, lookup_validation="Exists",
+            auto_popup="Yes", table=lookup_table,
+            prompt="Press F3 for the subject list"))
+        database.save_field_rule(FieldRule(
+            "TAPE_TITLE", case="Word",
+            prompt="Enter the movie title"))
+        database.save_field_rule(FieldRule("RUNTIME", required="Yes"))
+        rules_session = RulesSession(database)
+        rules_session.field_index = 1
+        rules_session.window = "rules"
+        rules_session.page = 1
+        rules_session.row = 1
+        rules_session._clamp_row()
+        lookup_editor = LookupTableEditor(lookup_table, database=database,
+                                          field_name="SUBJECT")
+        posting_editor = PostingEditor([
+            PostingRule("STOCK", "QOH", "Subtract", "", "",
+                        linking_index="STOCKCOD", common="TAPE_ID")],
+            database=database)
+        lookup_record = RecordSession(database, "enter")
+        lookup_record.field_index = 3
+        lookup_record._load_field()
+        lookup_record._open_lookup()
+
         history = indexing.search_history(database)
         state.database = database
         history_view = screens.search_history_overlay(
@@ -137,6 +172,10 @@ def main(argv: list[str] | None = None) -> int:
             "11-range-settings": range_session.view(),
             "12-search-table": search_session.view(),
             "13-search-history": history_view,
+            "14-field-rules": rules_session.view(),
+            "15-lookup-table": lookup_editor.view(),
+            "16-lookup-choices": lookup_record.view(),
+            "17-posting-rules": posting_editor.view(),
         }
         for name, view in shots.items():
             image = renderer.to_image(view.buffer)

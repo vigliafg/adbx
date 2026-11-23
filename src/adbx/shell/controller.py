@@ -13,6 +13,7 @@ from pathlib import Path
 
 from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ROW
 from ..data import indexing
+from ..data import rules as field_rules
 from ..data.indexing import RECORD_NUMBER, SEARCH_PREFIX
 from ..data.workspace import Database, Workspace, WorkspaceError
 from ..screen.keys import Key, character
@@ -23,6 +24,7 @@ from .files import strip_wildcard
 from .help import link_spans, topic, wrap_topic
 from .indexes import IndexSession, RangeSession
 from .records import RecordSession
+from .rules import RulesSession
 from .searching import SearchSession
 from .state import ShellState, default_root, demo_state
 from .theme import NEWPORT, Theme
@@ -63,8 +65,15 @@ RECORD_ITEMS: tuple[tuple[str, str], ...] = (
 DESIGN_ITEMS: tuple[tuple[str, str], ...] = (
     ("Create database", "create"),
     ("Modify database", "modify"),
+    ("Field rules", "field-rules"),
     ("Erase database", "erase"),
     ("Password", "password"),
+)
+
+RULES_ITEMS: tuple[tuple[str, str], ...] = (
+    ("Create/edit field rules", "edit"),
+    ("Re-evaluate field rules", "reevaluate"),
+    ("Erase field rules", "erase"),
 )
 
 UTILITY_ITEMS: tuple[tuple[str, str], ...] = (
@@ -150,6 +159,7 @@ class ShellController:
         self.index_session: IndexSession | None = None
         self.range_session: RangeSession | None = None
         self.search_session: SearchSession | None = None
+        self.rules_session: RulesSession | None = None
         self.pending_index_name = ""
         self.pending_locate_text = ""
         self.pending_replace: list[str] = []
@@ -177,6 +187,8 @@ class ShellController:
             base = self.range_session.view()
         elif self.base == "search" and self.search_session is not None:
             base = self.search_session.view()
+        elif self.base == "rules" and self.rules_session is not None:
+            base = self.rules_session.view()
         elif self.base == "directory":
             base = screens.directory(
                 self.state, self.cursor, self.input_text, self.input_cursor,
@@ -214,6 +226,7 @@ class ShellController:
                 "global": "Global Update/Delete",
                 "index-mode": "Create an Index",
                 "other": "Other",
+                "field-rules": "Field Rules",
             }.get(overlay.target, "Desktop Options")
             items = overlay.items or list(DESKTOP_ITEMS)
             return screens.submenu_overlay(base, items, overlay.selected,
@@ -259,6 +272,8 @@ class ShellController:
             self._handle_range_session(key)
         elif self.base == "search":
             self._handle_search_session(key)
+        elif self.base == "rules":
+            self._handle_rules_session(key)
         elif self.base == "directory":
             self._handle_directory(key)
         elif self.base == "structure":
@@ -879,6 +894,11 @@ class ShellController:
                     self.records.apply_range()
                 self._notice("Search/Sort List deleted.")
             return
+        if action == "erase-field-rules":
+            if self.database is not None:
+                self.database.clear_field_rules()
+                self._notice("Field rules erased.")
+            return
         if action == "replace-all":
             find = self.pending_replace[0] if self.pending_replace else ""
             replacement = (self.pending_replace[1]
@@ -933,10 +953,23 @@ class ShellController:
             self._other_action(action)
         elif overlay.target == "index-mode":
             self._start_index_session(action)
+        elif overlay.target == "field-rules":
+            self._field_rules_action(action)
 
     def _design_action(self, action: str) -> None:
         if action == "create":
             self._prompt_create()
+            return
+        if action == "field-rules":
+            if self.database is None:
+                self.overlay = None
+                self._notice("Select a database first.")
+                return
+            if self.database.locked:
+                self._prompt_unlock(self.database)
+                return
+            self.overlay = Overlay("submenu", items=list(RULES_ITEMS),
+                                   target="field-rules")
             return
         if self.database is None:
             self.overlay = None
@@ -950,6 +983,54 @@ class ShellController:
                 action=f"erase:{self.database.name}")
         elif action == "password":
             self._prompt_password()
+
+    # -- field rules -----------------------------------------------------
+    def _field_rules_action(self, action: str) -> None:
+        database = self.database
+        if database is None:
+            self._notice("Select a database first.")
+            return
+        if action == "edit":
+            self.rules_session = RulesSession(database, self.theme)
+            self.overlay = None
+            self.base = "rules"
+            return
+        if action == "reevaluate":
+            changed, problems = field_rules.re_evaluate(
+                database, database.field_rules())
+            message = f"Field rules applied to {changed} record(s)."
+            if problems:
+                message += " " + problems[0]
+                if len(problems) > 1:
+                    message += f" (+{len(problems) - 1} more)"
+            self._notice(message)
+            return
+        if action == "erase":
+            self.overlay = Overlay(
+                "confirm", text="Erase all field rules for this database?",
+                action="erase-field-rules")
+            return
+
+    def _handle_rules_session(self, key: Key) -> None:
+        session = self.rules_session
+        assert session is not None
+        if key.name == "F1" and not key.alt and session.editor is None:
+            self._open_help("field_rules")
+            return
+        session.handle(key)
+        if session.close:
+            self._finish_rules_session()
+
+    def _finish_rules_session(self) -> None:
+        session = self.rules_session
+        self.rules_session = None
+        self.base = "menu"
+        if session is None:
+            return
+        if session.saved:
+            self._notice("Field rules saved.")
+            if self.records is not None:
+                self.records.rule_map = self.database.field_rules()
 
     def _utility_action(self, action: str) -> None:
         self.overlay = None
@@ -1688,6 +1769,11 @@ class ShellController:
         self._open_entry(path)
 
     def _to_main_menu(self) -> None:
+        if self.base == "rules" and self.overlay is None:
+            if self.rules_session is not None:
+                self.rules_session.close = True
+                self._finish_rules_session()
+            return
         if self.base in ("index", "range", "search") and self.overlay is None:
             if self.base == "index" and self.index_session is not None:
                 self.index_session.close = True

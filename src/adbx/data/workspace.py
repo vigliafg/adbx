@@ -104,6 +104,22 @@ class Database:
     def save_current_range(self, settings) -> None:
         self.workspace.save_current_range(self.name, settings)
 
+    # -- regole di campo -------------------------------------------------
+    def field_rules(self) -> dict:
+        return self.workspace.field_rules(self.name)
+
+    def field_rule(self, field_name: str):
+        return self.workspace.field_rules(self.name).get(field_name.upper())
+
+    def save_field_rule(self, rule) -> None:
+        self.workspace.save_field_rule(self.name, rule)
+
+    def delete_field_rule(self, field_name: str) -> None:
+        self.workspace.delete_field_rule(self.name, field_name)
+
+    def clear_field_rules(self) -> None:
+        self.workspace.clear_field_rules(self.name)
+
     # -- lettura ---------------------------------------------------------
     def count(self, *, include_deleted: bool = False) -> int:
         sql = f'SELECT COUNT(*) FROM "{self.table}"'
@@ -370,6 +386,12 @@ class Workspace:
                 range_json TEXT NOT NULL DEFAULT '{}',
                 def_version INTEGER NOT NULL DEFAULT 0
             );
+            CREATE TABLE IF NOT EXISTS adbx_field_rules (
+                owner TEXT NOT NULL,
+                field TEXT NOT NULL,
+                rules TEXT NOT NULL,
+                PRIMARY KEY (owner, field)
+            );
             CREATE TABLE IF NOT EXISTS adbx_settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
@@ -465,6 +487,45 @@ class Workspace:
             "UPDATE adbx_database_state SET range_json = ?, primary_index = ? "
             "WHERE database = ?",
             (json.dumps(settings.to_dict()), settings.primary, name))
+        self._connection.commit()
+
+    # -- regole di campo -------------------------------------------------
+    def field_rules(self, owner: str) -> dict:
+        from .rules import FieldRule
+
+        rules: dict[str, FieldRule] = {}
+        for row in self._connection.execute(
+                "SELECT field, rules FROM adbx_field_rules WHERE owner = ? "
+                "ORDER BY field", (owner.strip().upper(),)):
+            try:
+                rule = FieldRule.from_dict(json.loads(row["rules"]))
+            except (ValueError, TypeError):
+                continue
+            rules[rule.field_name] = rule
+        return rules
+
+    def save_field_rule(self, owner: str, rule) -> None:
+        owner = owner.strip().upper()
+        if rule.is_empty:
+            self.delete_field_rule(owner, rule.field_name)
+            return
+        self._connection.execute(
+            "INSERT INTO adbx_field_rules (owner, field, rules) "
+            "VALUES (?, ?, ?) ON CONFLICT(owner, field) DO UPDATE SET "
+            "rules = excluded.rules",
+            (owner, rule.field_name.upper(), json.dumps(rule.to_dict())))
+        self._connection.commit()
+
+    def delete_field_rule(self, owner: str, field_name: str) -> None:
+        self._connection.execute(
+            "DELETE FROM adbx_field_rules WHERE owner = ? AND field = ?",
+            (owner.strip().upper(), field_name.upper()))
+        self._connection.commit()
+
+    def clear_field_rules(self, owner: str) -> None:
+        self._connection.execute(
+            "DELETE FROM adbx_field_rules WHERE owner = ?",
+            (owner.strip().upper(),))
         self._connection.commit()
 
     # -- catalogo --------------------------------------------------------
@@ -661,6 +722,7 @@ class Workspace:
                 "UPDATE adbx_databases SET fields = ?, updated = ? WHERE name = ?",
                 (json.dumps([field.to_dict() for field in new_fields]),
                  time.time(), database.name))
+            self._migrate_field_rules(database.name, mapping)
             self._connection.commit()
         except Exception:
             self._connection.rollback()
@@ -671,6 +733,24 @@ class Workspace:
         self.save_database(updated)
         updated.bump_revision()
         return updated
+
+    def _migrate_field_rules(self, owner: str,
+                             mapping: Sequence[tuple[str | None, Field]]) -> None:
+        """Segue i campi rinominati e cancella le regole dei campi rimossi."""
+        existing = self.field_rules(owner)
+        wanted: dict[str, tuple[str, object]] = {}
+        for old_name, new_field in mapping:
+            if old_name is None or old_name not in existing:
+                continue
+            wanted[new_field.name] = (new_field.name, existing[old_name])
+        self._connection.execute(
+            "DELETE FROM adbx_field_rules WHERE owner = ?", (owner,))
+        for field_name, (_name, rule) in wanted.items():
+            rule.field_name = field_name
+            self._connection.execute(
+                "INSERT OR REPLACE INTO adbx_field_rules (owner, field, rules) "
+                "VALUES (?, ?, ?)",
+                (owner, field_name, json.dumps(rule.to_dict())))
 
     def drop_database(self, name: str) -> bool:
         database = self.get(name)
@@ -683,6 +763,7 @@ class Workspace:
         self._connection.execute("DELETE FROM adbx_ranges WHERE database = ?", (name,))
         self._connection.execute("DELETE FROM adbx_searches WHERE database = ?", (name,))
         self._connection.execute("DELETE FROM adbx_search_lists WHERE database = ?", (name,))
+        self._connection.execute("DELETE FROM adbx_field_rules WHERE owner = ?", (name,))
         self._connection.commit()
         if database.origin == "created" and database.source.parent == self.directory:
             try:

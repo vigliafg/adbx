@@ -9,7 +9,7 @@ finestra con una griglia di caratteri scalabile (132×43, font TrueType), su un 
 su Linux, Windows e macOS.
 
 - Licenza: MIT
-- Stato: **O3 completata** — indici, range, search/sort list, Find/Locate, sostituzione e duplicati
+- Stato: **O4 completata** — regole di campo, lookup table/database, cascading, conditional e post data
 - Piano completo: [`PLAN.md`](PLAN.md)
 - Diario di implementazione: [`DIARIO.md`](DIARIO.md)
 - Inventario funzionale estratto dai manuali:
@@ -21,6 +21,7 @@ su Linux, Windows e macOS.
   shell [`docs/spec/02-shell.md`](docs/spec/02-shell.md),
   dati e immissione [`docs/spec/04-dati-immissione.md`](docs/spec/04-dati-immissione.md),
   ricerca e indici [`docs/spec/05-ricerca-indici.md`](docs/spec/05-ricerca-indici.md),
+  regole di campo [`docs/spec/06-regole-campo.md`](docs/spec/06-regole-campo.md),
   ambiente DOS di riferimento
   [`docs/spec/03-ambiente-dos-riferimento.md`](docs/spec/03-ambiente-dos-riferimento.md)
 - Schermate: [`docs/render/`](docs/render/)
@@ -61,6 +62,14 @@ costruisce liste one-time o salvate in Table/Expression mode, con storia e
 marcatura `♦` quando sono out of date; in View/Browse `F` è Find, `L` è
 Locate, `I` è l'indice, `R` il range, e in View `S` sostituisce un testo.
 `Global update/delete → Delete duplicate records` usa l'indice primario.
+
+Con **O4** il database diventa dichiarativo: `Database/set design → Field
+rules` definisce valori calcolati, default, incrementi automatici, template e
+maschere, campi obbligatori, validazioni con messaggio, doppia immissione,
+skip, prompt, post data e lookup. Le lookup possono essere tabelle (fino a 6
+colonne), database con mapping, cascate ad albero o liste condizionali;
+`F3` apre le scelte durante l'immissione e riempie i campi collegati.
+`Re-evaluate field rules` applica calcoli e maiuscole ai record esistenti.
 
 ## Riferimenti
 

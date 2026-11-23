@@ -70,7 +70,8 @@ def form_screen(session: RecordSession, theme: Theme = NEWPORT) -> View:
                               f"rec:field:{index}"))
 
     hint = _form_hint(session)
-    draw_help_line(buffer, theme, session.status or hint)
+    draw_help_line(buffer, theme,
+                   session.status or _form_field_hint(session) or hint)
     regions.extend(draw_menu_line(buffer, theme, MODE_KEYS[session.mode]))
     return View(buffer, regions)
 
@@ -118,6 +119,13 @@ def _position_text(session: RecordSession) -> str:
         if session.search_out_of_date:
             text += " \u2666"
     return text
+
+
+def _form_field_hint(session: RecordSession) -> str:
+    prompt = session.field_prompt()
+    if prompt:
+        return prompt
+    return ""
 
 
 def _form_hint(session: RecordSession) -> str:
@@ -245,3 +253,76 @@ def memo_overlay(session: RecordSession, theme: Theme = NEWPORT) -> View:
 
 __all__ = ["BROWSE_HEADER_ROW", "BROWSE_TOP", "browse_screen", "form_screen",
            "memo_overlay"]
+
+
+def lookup_overlay(session: RecordSession, theme: Theme = NEWPORT) -> View:
+    """Finestra di scelta sopra il form; gestisce tabelle e cascate."""
+    state = session.lookup
+    assert state is not None
+    base = form_screen(session, theme)
+    choices = state.choices
+    columns = list(choices.headers) or ["Choice"]
+    def _width(column: int, maximum: int) -> int:
+        longest = len(columns[column])
+        for row in choices.rows[:50]:
+            if column < len(row):
+                longest = max(longest, len(row[column]))
+        return min(maximum, max(8, longest + 2))
+
+    widths = [_width(0, 30)]
+    widths += [_width(index, 18) for index in range(1, len(columns))]
+    total = sum(widths) + 2
+    width = min(SCREEN_WIDTH - 4, max(34, total))
+    height = min(STATUS_ROW - 2, max(6, min(len(choices.values), 15) + 6))
+    title = session.lookup.field_name.title() + " Choices"
+    if state.path:
+        title += " - " + " > ".join(state.path)
+    panel = window(width, height, title, theme)
+    header = ""
+    for name, column_width in zip(columns, widths):
+        header += clip_text(name, column_width).ljust(column_width)
+    panel.write(2, 1, clip_text(header, width - 2), fg=theme.label,
+                bg=theme.window_bg, bold=True)
+    visible = height - 5
+    top = max(0, min(state.selected - visible + 1,
+                     max(0, len(choices.values) - visible)))
+    regions: list[Region] = []
+    for offset in range(visible):
+        index = top + offset
+        if index >= len(choices.values):
+            break
+        row = 3 + offset
+        selected = index == state.selected
+        fg = theme.selected_fg if selected else theme.window_fg
+        bg = theme.selected_bg if selected else theme.window_bg
+        if selected:
+            panel.fill_rect(row, 1, 1, width - 2, " ", fg=fg, bg=bg)
+        cells = choices.rows[index] if index < len(choices.rows) else []
+        text = ""
+        for column_index, column_width in enumerate(widths):
+            cell = cells[column_index] if column_index < len(cells) else ""
+            text += clip_text(cell, column_width).ljust(column_width)
+        panel.write(row, 1, clip_text(text, width - 2), fg=fg, bg=bg)
+        regions.append(Region(row, 1, 1, width - 2, f"lookup:{index}"))
+    footer = ("ENTER choose   LEFT up a level   ESC cancel"
+              if state.path or choices.source == "Cascading"
+              else "ENTER choose   ESC cancel   type to find")
+    panel.write(height - 2, 1, clip_text(footer, width - 2), fg=theme.muted,
+                bg=theme.window_bg)
+    location = "3"
+    rule = session._rule(session._field())
+    if rule is not None:
+        location = rule.location
+    if location == "Hidden":
+        row = max(2, (STATUS_ROW - height) // 2)
+        col = (SCREEN_WIDTH - width) // 2
+    else:
+        number = int(location) if location.isdigit() else 5
+        column = (number - 1) % 3
+        line = (number - 1) // 3
+        col = [2, (SCREEN_WIDTH - width) // 2,
+               SCREEN_WIDTH - width - 2][column]
+        row = [2, (STATUS_ROW - height) // 2,
+               STATUS_ROW - height - 1][line]
+    return screens.overlay_view(base, panel, max(1, row), max(1, col),
+                                regions, theme)

@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 
 from ..cell.buffer import STATUS_ROW
 from ..data import indexing
+from ..data import rules as field_rules
 from ..data.fields import Field, FieldError, format_value, parse_value
 from ..data.indexing import (
     RECORD_NUMBER,
@@ -43,10 +44,12 @@ MODE_KEYS = {
     "browse": [("F1", "Help"), ("F", "Find"), ("L", "Locate"), ("I", "Index"),
                ("R", "Range"), ("F10", "Continue"), ("F7", "Show deleted"),
                ("Alt-M", "Memo"), ("Alt-D", "Delete"), ("Alt-U", "Undelete")],
-    "enter": [("F1", "Help"), ("F10", "Save"), ("ESC", "Cancel"),
-              ("Alt-M", "Memo"), ("Alt-F5", "Copy"), ("Alt-F6", "Paste")],
-    "change": [("F1", "Help"), ("F10", "Save"), ("ESC", "Cancel"),
-               ("Alt-M", "Memo"), ("Alt-F5", "Copy"), ("Alt-F6", "Paste")],
+    "enter": [("F1", "Help"), ("F3", "Choices"), ("F10", "Save"),
+              ("ESC", "Cancel"), ("Alt-M", "Memo"), ("Alt-F5", "Copy"),
+              ("Alt-F6", "Paste")],
+    "change": [("F1", "Help"), ("F3", "Choices"), ("F10", "Save"),
+               ("ESC", "Cancel"), ("Alt-M", "Memo"), ("Alt-F5", "Copy"),
+               ("Alt-F6", "Paste")],
 }
 
 FORM_WORK_TOP = 3
@@ -170,6 +173,29 @@ class MemoEditor:
 
 
 @dataclass
+class LookupState:
+    """Finestra di lookup aperta sul campo corrente."""
+
+    field_name: str
+    choices: field_rules.LookupChoices
+    selected: int = 0
+    path: tuple[str, ...] = ()
+    search: str = ""
+    auto: bool = False
+
+    def move(self, delta: int) -> None:
+        if self.choices.values:
+            self.selected = max(0, min(len(self.choices.values) - 1,
+                                       self.selected + delta))
+
+    @property
+    def choice(self) -> str:
+        if 0 <= self.selected < len(self.choices.values):
+            return self.choices.values[self.selected]
+        return ""
+
+
+@dataclass
 class LocateState:
     """Ricerca di un testo in un insieme di campi (Locate a record)."""
 
@@ -205,6 +231,10 @@ class RecordSession:
     range_settings: RangeSettings | None = None
     find_history: list[str] = field(default_factory=list)
     locate: LocateState | None = None
+    lookup: LookupState | None = None
+    double: tuple[str, str] | None = None
+    rule_map: dict[str, field_rules.FieldRule] = field(
+        init=False, default_factory=dict)
     _seqs: list[int] = field(init=False, default_factory=list)
     _browse_rows: list[tuple[int, bool, dict[str, str]]] | None = field(
         init=False, default=None)
@@ -214,6 +244,7 @@ class RecordSession:
     def __post_init__(self) -> None:
         if self.mode not in MODE_TITLES:
             raise ValueError(f"Unknown record mode: {self.mode}")
+        self.rule_map = self.database.field_rules()
         if self.range_settings is None:
             self.range_settings = self.database.current_range.copy()
         elif isinstance(self.range_settings, RangeSettings):
@@ -277,6 +308,123 @@ class RecordSession:
             self._load_record()
         self.status = "Range applied."
 
+    # -- regole di campo -------------------------------------------------
+    def _rule(self, field: Field | None) -> field_rules.FieldRule | None:
+        if field is None:
+            return None
+        return self.rule_map.get(field.name)
+
+    def field_prompt(self) -> str:
+        field = self._field()
+        rule = self._rule(field)
+        return rule.prompt if rule and rule.prompt else ""
+
+    def _is_calculated(self, field: Field) -> bool:
+        rule = self._rule(field)
+        return bool(rule and rule.value in ("Calculated", "Summary"))
+
+    def _recalculate(self) -> None:
+        if self.mode in ("enter", "change"):
+            field_rules.recalculate(self.rule_map, self.database, self.draft)
+
+    def _apply_new_record_rules(self) -> None:
+        for definition in self.database.fields:
+            rule = self._rule(definition)
+            if rule is None or definition.is_memo \
+                    or self._is_calculated(definition):
+                continue
+            if rule.default_mode != "None":
+                value = field_rules.default_value(rule, self.database,
+                                                  self.draft)
+                if value:
+                    self.draft[definition.name] = value
+            if rule.increment == "Records":
+                self.draft[definition.name] = field_rules.next_increment(
+                    rule, self.database, definition)
+        self._recalculate()
+
+    def _open_lookup(self, *, auto: bool = False) -> None:
+        field = self._field()
+        rule = self._rule(field)
+        if field is None or rule is None or not rule.lookup:
+            return
+        choices = field_rules.lookup_choices(rule, self.database, self.draft)
+        if choices.empty:
+            self.status = "There are no lookup values."
+            return
+        self.lookup = LookupState(field.name, choices, auto=auto)
+        self.status = ""
+
+    def _maybe_open_lookup(self) -> None:
+        if self.lookup is not None or self.mode not in ("enter", "change"):
+            return
+        field = self._field()
+        rule = self._rule(field)
+        if rule is None or not rule.lookup:
+            return
+        if field_rules.auto_popup(rule, self.database, self.draft,
+                                  mode=self.mode):
+            self._open_lookup(auto=True)
+
+    def _handle_lookup(self, key: Key) -> None:
+        state = self.lookup
+        assert state is not None
+        rule = self._rule(self._field())
+        name = key.name
+        if name == "ESC":
+            self.lookup = None
+            self.status = "Lookup cancelled."
+            return
+        if name == "UP":
+            state.move(-1)
+        elif name == "DOWN":
+            state.move(1)
+        elif name == "PGUP":
+            state.move(-10)
+        elif name == "PGDN":
+            state.move(10)
+        elif name in ("LEFT", "BACKSPACE") and state.path:
+            state.path = state.path[:-1]
+            state.selected = 0
+            state.search = ""
+            state.choices = field_rules.lookup_choices(
+                rule, self.database, self.draft, state.path)
+        elif name == "ENTER":
+            choice = state.choice
+            if not choice:
+                return
+            if rule is not None and rule.lookup_source == "Advanced" \
+                    and rule.advanced == "Cascading table":
+                _value, endpoint = field_rules.cascading_value(
+                    rule, state.path, choice)
+                if not endpoint:
+                    state.path = state.path + (choice,)
+                    state.selected = 0
+                    state.search = ""
+                    state.choices = field_rules.lookup_choices(
+                        rule, self.database, self.draft, state.path)
+                    return
+            filled = field_rules.lookup_fill(
+                rule, self.database, self.draft, choice, state.path)
+            self.draft.update(filled)
+            self.lookup = None
+            self.dirty = True
+            self._recalculate()
+            self._load_field()
+            self.status = "Lookup value entered."
+            self._maybe_auto_advance()
+        else:
+            text = character(key)
+            if text:
+                if len(text) == 1 and text.isalpha() and not key.shift:
+                    text = text.lower()
+                state.search += text
+                needle = state.search.upper()
+                for index, value in enumerate(state.choices.values):
+                    if value.upper().startswith(needle):
+                        state.selected = index
+                        break
+
     def _reload(self, keep: int | None = None) -> None:
         try:
             self._seqs = indexing.ordered_sequences(
@@ -310,6 +458,8 @@ class RecordSession:
         self.top = max(0, min(self.top, max(0, len(self._seqs) - visible)))
 
     def _load_record(self) -> None:
+        self.lookup = None
+        self.double = None
         seq = self.current_seq
         if seq is None:
             self.draft = {}
@@ -325,7 +475,28 @@ class RecordSession:
         self.draft = {field.name: "" for field in self.database.fields}
         self.field_index = 0
         self.dirty = False
+        self.double = None
+        self.lookup = None
+        self._apply_new_record_rules()
+        self.field_index = self._first_usable(0, 1)
         self._load_field()
+        self._maybe_open_lookup()
+
+    def _first_usable(self, start: int, direction: int) -> int:
+        count = len(self.database.fields)
+        if not count:
+            return 0
+        index = start
+        for _step in range(count):
+            field = self.database.fields[index]
+            rule = self._rule(field)
+            if not self._is_calculated(field) and not (
+                    rule is not None
+                    and field_rules.should_skip(rule, self.database,
+                                                self.draft)):
+                return index
+            index = (index + direction) % count
+        return start
 
     def _values(self) -> dict[str, str]:
         if self.mode in ("enter", "change"):
@@ -345,27 +516,99 @@ class RecordSession:
             self.edit_text = ""
             self.edit_cursor = 0
             return
-        self.edit_text = format_value(field, self.draft.get(field.name, ""))
+        value = self.draft.get(field.name, "")
+        rule = self._rule(field)
+        if field.is_memo:
+            self.edit_text = ""
+        elif rule is not None and rule.template:
+            self.edit_text = field_rules.template_display(rule.template, value)
+        else:
+            self.edit_text = format_value(field, value)
         self.edit_cursor = len(self.edit_text)
+        if rule is not None and rule.template:
+            positions = field_rules.editable_positions(rule.template)
+            empty = next((position for position in positions
+                          if position >= len(self.edit_text)
+                          or not self.edit_text[position].strip()), None)
+            self.edit_cursor = empty if empty is not None else len(self.edit_text)
 
     def _commit_field(self) -> bool:
         field = self._field()
         if field is None or field.is_memo:
             return True
+        if self.mode not in ("enter", "change") or self._is_calculated(field):
+            return True
+        rule = self._rule(field)
+        text = self.edit_text
+        if rule is not None and rule.template and \
+                field_rules.template_is_blank(rule.template, text):
+            text = ""
+        if rule is not None and rule.mask:
+            error = field_rules.mask_error(rule.template, rule.mask, text)
+            if error:
+                if not rule.allow_exceptions:
+                    self.status = error
+                    return False
+                self.status = error + " Allowed as an exception."
         try:
-            value = parse_value(field, self.edit_text)
+            value = parse_value(field, text)
         except FieldError as exc:
             self.status = str(exc)
             return False
-        if value != self.draft.get(field.name, ""):
-            self.dirty = True
+        if rule is not None and rule.case != "None":
+            value = field_rules.apply_case(value, rule.case)
+        if rule is not None and field_rules.double_entry_required(
+                rule, self.database, self.draft):
+            if self.double is None or self.double[0] != field.name:
+                self.double = (field.name, value)
+                self.draft[field.name] = value
+                self.edit_text = ""
+                self.edit_cursor = 0
+                self.status = f"Enter {field.name} again to confirm."
+                return False
+            first = self.double[1]
+            self.double = None
+            if value.strip() != first.strip():
+                self.draft[field.name] = ""
+                self.edit_text = ""
+                self.edit_cursor = 0
+                self.status = ("The two entries do not match. "
+                               "Enter the value again.")
+                return False
+        previous = self.draft.get(field.name, "")
         self.draft[field.name] = value
-        self.edit_text = format_value(field, value)
+        if value != previous:
+            self.dirty = True
+        if rule is not None and rule.template:
+            self.edit_text = field_rules.template_display(rule.template, value)
+        else:
+            self.edit_text = format_value(field, value)
         self.edit_cursor = min(self.edit_cursor, len(self.edit_text))
+        if rule is not None:
+            error = field_rules.validation_error(rule, self.database,
+                                                 self.draft)
+            if error:
+                self.status = error
+                return False
+            error = field_rules.lookup_validation_error(rule, self.database,
+                                                        self.draft)
+            if error:
+                if rule.lookup_allow_exceptions:
+                    self.status = error + " Allowed as an exception."
+                else:
+                    self.status = error
+                    return False
+        self._recalculate()
         return True
 
     def _move_field(self, delta: int, *, wrap: bool = False) -> None:
         if not self._commit_field():
+            return
+        field = self._field()
+        rule = self._rule(field)
+        if field is not None and delta > 0 and rule is not None and \
+                field_rules.missing_required(rule, self.database, self.draft):
+            self.status = f"{field.name} is required."
             return
         count = len(self.database.fields)
         if count == 0:
@@ -375,19 +618,66 @@ class RecordSession:
             target %= count
         else:
             target = max(0, min(count - 1, target))
+        direction = 1 if delta > 0 else -1
+        for _step in range(count):
+            candidate = self.database.fields[target]
+            candidate_rule = self._rule(candidate)
+            calculated = self._is_calculated(candidate)
+            skipped = (candidate_rule is not None and
+                       field_rules.should_skip(candidate_rule, self.database,
+                                               self.draft))
+            if not calculated and not skipped:
+                break
+            next_target = target + direction
+            if wrap:
+                next_target %= count
+            elif next_target < 0 or next_target >= count:
+                return
+            target = next_target
+        else:
+            return
         if target != self.field_index:
             self.field_index = target
+            self.lookup = None
             self._load_field()
+            self._maybe_open_lookup()
+
+    def _maybe_auto_advance(self) -> None:
+        field = self._field()
+        rule = self._rule(field)
+        if field is None or rule is None or not rule.auto_advance:
+            return
+        if rule.template:
+            positions = field_rules.editable_positions(rule.template)
+            if positions and all(
+                    position < len(self.edit_text)
+                    and self.edit_text[position].strip()
+                    for position in positions):
+                self._move_field(1, wrap=True)
+            return
+        if len(self.edit_text) >= field.length:
+            self._move_field(1, wrap=True)
 
     def _typed(self, key: Key) -> None:
         if self.mode not in ("enter", "change"):
             return
         field = self._field()
-        if field is None or field.is_memo:
+        if field is None or field.is_memo or self._is_calculated(field):
             return
         text = _typed_char(key)
         if not text:
             return
+        rule = self._rule(field)
+        if rule is not None and rule.template:
+            self._typed_template(field, rule, text)
+            return
+        if rule is not None and rule.mask and self.edit_cursor < len(rule.mask):
+            mask_char = rule.mask[self.edit_cursor]
+            if not _mask_accepts(mask_char, text):
+                if not rule.allow_exceptions:
+                    self.status = _mask_message(mask_char)
+                    return
+                self.status = _mask_message(mask_char) + " Allowed as an exception."
         if self.insert_mode:
             self.edit_text = (self.edit_text[:self.edit_cursor] + text
                               + self.edit_text[self.edit_cursor:])
@@ -396,6 +686,64 @@ class RecordSession:
                               + self.edit_text[self.edit_cursor + 1:])
         self.edit_cursor += len(text)
         self.dirty = True
+        self._maybe_auto_advance()
+
+    def _backspace_template(self, rule: field_rules.FieldRule) -> None:
+        positions = field_rules.editable_positions(rule.template)
+        candidates = [position for position in positions
+                      if position < self.edit_cursor
+                      and position < len(self.edit_text)
+                      and self.edit_text[position].strip()]
+        if not candidates:
+            return
+        target = candidates[-1]
+        chars = list(self.edit_text)
+        chars[target] = " "
+        self.edit_text = "".join(chars)
+        self.edit_cursor = target
+        self.dirty = True
+
+    def _delete_template(self, rule: field_rules.FieldRule) -> None:
+        positions = field_rules.editable_positions(rule.template)
+        target = next((position for position in positions
+                       if position >= self.edit_cursor
+                       and position < len(self.edit_text)
+                       and self.edit_text[position].strip()), None)
+        if target is None:
+            return
+        chars = list(self.edit_text)
+        chars[target] = " "
+        self.edit_text = "".join(chars)
+        self.dirty = True
+
+    def _typed_template(self, field: Field, rule: field_rules.FieldRule,
+                        text: str) -> None:
+        template = rule.template
+        positions = field_rules.editable_positions(template)
+        if not positions:
+            return
+        current = self.edit_text
+        if len(current) != len(template):
+            current = field_rules.template_display(template, current)
+        target = next((position for position in positions
+                       if position >= self.edit_cursor), None)
+        if target is None:
+            target = next((position for position in positions
+                           if not current[position].strip()), None)
+        if target is None:
+            return
+        mask_char = field_rules.mask_slots(template, rule.mask).get(target, "")
+        if mask_char and not _mask_accepts(mask_char, text):
+            if not rule.allow_exceptions:
+                self.status = _mask_message(mask_char)
+                return
+            self.status = _mask_message(mask_char) + " Allowed as an exception."
+        chars = list(current)
+        chars[target] = text
+        self.edit_text = "".join(chars)
+        self.edit_cursor = target + 1
+        self.dirty = True
+        self._maybe_auto_advance()
 
     # -- salvataggio -----------------------------------------------------
     def _duplicate_indexes(self, values: dict[str, str]
@@ -436,12 +784,49 @@ class RecordSession:
     def save(self) -> bool:
         if self.mode not in ("enter", "change"):
             return True
+        if self.double is not None:
+            self.status = (f"Enter {self.double[0]} again to confirm, "
+                           "then save.")
+            return False
         if not self._commit_field():
             return False
+        self._recalculate()
+        for definition in self.database.fields:
+            rule = self._rule(definition)
+            if rule is None or definition.is_memo:
+                continue
+            if field_rules.missing_required(rule, self.database, self.draft):
+                self.status = f"{definition.name} is required."
+                return False
+            error = field_rules.validation_error(rule, self.database,
+                                                 self.draft)
+            if error:
+                self.status = f"{definition.name}: {error}"
+                return False
+            if rule.mask and not rule.allow_exceptions:
+                error = field_rules.mask_error(
+                    rule.template, rule.mask,
+                    self.draft.get(definition.name, ""))
+                if error:
+                    self.status = f"{definition.name}: {error}"
+                    return False
+            error = field_rules.lookup_validation_error(rule, self.database,
+                                                        self.draft)
+            if error and not rule.lookup_allow_exceptions:
+                self.status = f"{definition.name}: {error}"
+                return False
         if not any((self.draft.get(field.name) or "").strip()
                    for field in self.database.fields):
             self.status = "Enter at least one value before saving."
             return False
+        # Increment = Updates: +1 a ogni salvataggio.
+        for definition in self.database.fields:
+            rule = self._rule(definition)
+            if rule is not None and rule.increment == "Updates" \
+                    and not definition.is_memo:
+                self.draft[definition.name] = field_rules.increment_value(
+                    definition, self.draft.get(definition.name, ""),
+                    rule.template)
         duplicates = self._duplicate_indexes(self.draft)
         blocked = [definition.name for definition, exception in duplicates
                    if not exception]
@@ -455,6 +840,8 @@ class RecordSession:
                    + ", ".join(definition.name
                                for definition, _exception in duplicates)
                    + ".")
+        old_values = (self.database.read(self.seq)
+                      if self.seq is not None else {})
         try:
             if self.seq is None:
                 self.seq = self.database.append(self.draft)
@@ -465,6 +852,14 @@ class RecordSession:
         except WorkspaceError as exc:
             self.status = str(exc)
             return False
+        warnings: list[str] = []
+        for definition in self.database.fields:
+            rule = self._rule(definition)
+            if rule is not None and rule.post_data:
+                warnings.extend(field_rules.post_values(
+                    rule, self.database, old_values, self.draft, rule))
+        if warnings:
+            self.status += " " + " ".join(warnings)
         self._persist()
         self.dirty = False
         self._reload(keep=self.seq)
@@ -852,6 +1247,9 @@ class RecordSession:
     def handle(self, key: Key) -> None:
         self.status = ""
         self.help_topic = "browse" if self.mode == "browse" else "records"
+        if self.lookup is not None:
+            self._handle_lookup(key)
+            return
         if self.memo is not None:
             action = self.memo.handle(key)
             if action:
@@ -985,18 +1383,29 @@ class RecordSession:
             self.edit_cursor = 0
             self.dirty = True
         elif name == "BACKSPACE":
-            if self.edit_cursor:
+            field = self._field()
+            rule = self._rule(field)
+            if rule is not None and rule.template:
+                self._backspace_template(rule)
+            elif self.edit_cursor:
                 self.edit_text = (self.edit_text[:self.edit_cursor - 1]
                                   + self.edit_text[self.edit_cursor:])
                 self.edit_cursor -= 1
                 self.dirty = True
         elif name == "DELETE":
-            self.edit_text = (self.edit_text[:self.edit_cursor]
-                              + self.edit_text[self.edit_cursor + 1:])
-            self.dirty = True
+            field = self._field()
+            rule = self._rule(field)
+            if rule is not None and rule.template:
+                self._delete_template(rule)
+            else:
+                self.edit_text = (self.edit_text[:self.edit_cursor]
+                                  + self.edit_text[self.edit_cursor + 1:])
+                self.dirty = True
         elif name == "INSERT":
             self.insert_mode = not self.insert_mode
             self.status = "Insert on." if self.insert_mode else "Overwrite on."
+        elif name == "F3":
+            self._open_lookup()
         elif name == "ENTER":
             field = self._field()
             if (self.mode == "enter" and field is not None
@@ -1016,6 +1425,12 @@ class RecordSession:
     # -- mouse -----------------------------------------------------------
     def click_action(self, action: str, *, double: bool = False) -> None:
         kind, _, value = action.partition(":")
+        if kind == "lookup" and value.isdigit() and self.lookup is not None:
+            self.lookup.selected = max(0, min(len(self.lookup.choices.values) - 1,
+                                              int(value)))
+            if double:
+                self._handle_lookup(Key("ENTER"))
+            return
         if kind == "row" and value.isdigit():
             self._goto_record(int(value))
         elif kind == "field" and value.isdigit():
@@ -1029,11 +1444,33 @@ class RecordSession:
     def view(self) -> View:
         from . import record_screens
 
+        if self.lookup is not None:
+            return record_screens.lookup_overlay(self, self.theme)
         if self.memo is not None:
             return record_screens.memo_overlay(self, self.theme)
         if self.mode == "browse":
             return record_screens.browse_screen(self, self.theme)
         return record_screens.form_screen(self, self.theme)
+
+
+def _mask_accepts(mask_char: str, text: str) -> bool:
+    if mask_char == "9":
+        return text.isdigit()
+    if mask_char == "A":
+        return text.isalpha() and text.isupper()
+    if mask_char == "a":
+        return text.isalpha()
+    return True
+
+
+def _mask_message(mask_char: str) -> str:
+    if mask_char == "9":
+        return "This position accepts digits only."
+    if mask_char == "A":
+        return "This position accepts uppercase letters only."
+    if mask_char == "a":
+        return "This position accepts letters only."
+    return ""
 
 
 def _typed_char(key: Key) -> str:
