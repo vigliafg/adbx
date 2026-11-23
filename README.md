@@ -26,7 +26,8 @@ script e designer molto più semplici e fedeli.
 ## Comandi previsti
 
 ```bash
-python -m adbx            # avvia l'applicazione
+./start.sh                # avvia l'app senza attivare un ambiente (crea .venv se serve)
+python -m adbx            # avvia l'applicazione (con PyQt6 già disponibile)
 python -m adbx --smoke    # avvio headless di verifica
 pytest                    # suite completa
 python tools/capture_ui.py  # rendering canonici

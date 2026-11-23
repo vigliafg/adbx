@@ -93,3 +93,19 @@ Formato:
   - La schermata dimostrativa è provvisoria: in O1 diventa il main menu reale.
 - Prossimo passo: O1 — shell: main menu a 12 comandi con hot key, status box,
   browser di directory, help `F1` contestuale, `Quit`.
+
+### 2026-11-23 — O0 — Avvio rapido (start.sh)
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: lanciare l'app senza attivare a mano un ambiente virtuale.
+- File toccati: `start.sh`, `README.md`, `DIARIO.md`.
+- Scelte: il launcher sceglie l'interprete in ordine `$ADBX_PYTHON`,
+  `.venv/bin/python`, `python3`, `python`; se manca PyQt6 crea `.venv` e vi
+  installa il pacchetto con `pip install -e .` alla prima esecuzione, poi
+  riusa l'ambiente. Passa gli argomenti (`--smoke`, `--version`) e imposta
+  `PYTHONPATH=src`, quindi funziona anche da altre directory. Nessuna
+  attivazione manuale.
+- Test: `./start.sh --smoke` e `./start.sh --version` verdi, anche da `/tmp`;
+  `69 passed`.
+- Problemi aperti: nessuno.
+- Prossimo passo: O1 — shell.
