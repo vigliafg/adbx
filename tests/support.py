@@ -13,8 +13,11 @@ DEFAULT_FIELDS = tuple(
 
 
 def write_dbf(path: Path, *, records: int = 0, fields=DEFAULT_FIELDS,
+              rows: list[tuple[str, ...]] | None = None,
               updated: tuple[int, int, int] = (1993, 6, 1)) -> Path:
     year, month, day = updated
+    if rows is not None:
+        records = len(rows)
     header_length = 32 + 32 * len(fields) + 1
     record_length = 1 + sum(field[2] for field in fields)
 
@@ -31,7 +34,18 @@ def write_dbf(path: Path, *, records: int = 0, fields=DEFAULT_FIELDS,
         block[17] = decimals
         data += block
     data += b"\x0d"
-    data += b"\x00" * (records * record_length)
+    if rows is None:
+        data += b"\x00" * (records * record_length)
+    else:
+        for row in rows:
+            data += b" "
+            for (name, ftype, length, decimals), value in zip(fields, row):
+                text = str(value)
+                if ftype == "N":
+                    text = text.rjust(length)
+                else:
+                    text = text.ljust(length)
+                data += text.encode("cp437", "replace")[:length]
     path.write_bytes(bytes(data))
     stamp = datetime(year, month, day, 12, 0).timestamp()
     os.utime(path, (stamp, stamp))

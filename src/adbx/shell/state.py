@@ -5,9 +5,13 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ..data.dbf import DbfError, DbfField, DbfHeader, read_header
 from .files import Entry, Listing, scan
+
+if TYPE_CHECKING:
+    from ..data.workspace import Database
 
 
 @dataclass(frozen=True)
@@ -33,6 +37,7 @@ class ShellState:
     pattern: str = "*"
     detail: bool = False
     current: CurrentFile | None = None
+    database: "Database | None" = None
     history: list[Path] = field(default_factory=list)
     listing: Listing | None = None
 
@@ -90,6 +95,8 @@ class ShellState:
 
     @property
     def records_text(self) -> str:
+        if self.database is not None:
+            return str(self.database.count())
         if not self.current or self.current.records is None:
             return ""
         return str(self.current.records)

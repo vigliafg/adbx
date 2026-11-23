@@ -12,11 +12,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ROW
+from ..data.workspace import Database, Workspace, WorkspaceError
 from ..screen.keys import Key, character
 from ..screen.keys import parse as parse_key
 from . import screens
+from .designer import DesignerSession
 from .files import strip_wildcard
 from .help import link_spans, topic, wrap_topic
+from .records import RecordSession
 from .state import ShellState, default_root, demo_state
 from .theme import NEWPORT, Theme
 from .widgets import View
@@ -36,17 +39,36 @@ DESKTOP_ITEMS: tuple[tuple[str, str | None], ...] = (
 )
 
 COMMAND_WAVES = {
-    "view": "O2",
     "print": "O7",
     "search": "O3",
     "indexes": "O3",
     "global": "O9",
-    "design": "O2",
     "layouts": "O6",
     "applications": "O10",
-    "utilities": "O9",
     "other": "O12",
 }
+
+RECORD_ITEMS: tuple[tuple[str, str], ...] = (
+    ("View records", "view"),
+    ("Enter records", "enter"),
+    ("Change records", "change"),
+    ("Browse records", "browse"),
+    ("Delete/recall records", "recall"),
+)
+
+DESIGN_ITEMS: tuple[tuple[str, str], ...] = (
+    ("Create database", "create"),
+    ("Modify database", "modify"),
+    ("Erase database", "erase"),
+    ("Password", "password"),
+)
+
+UTILITY_ITEMS: tuple[tuple[str, str], ...] = (
+    ("Pack database", "pack"),
+    ("Copy database", "copy"),
+    ("Append to database", "append"),
+    ("Summarize database", "summarize"),
+)
 
 
 @dataclass
@@ -58,6 +80,13 @@ class Overlay:
     link: int = 0
     selected: int = 0
     stack: list[str] = field(default_factory=list)
+    items: list[tuple[str, str]] = field(default_factory=list)
+    target: str = "desktop"
+    input_text: str = ""
+    input_cursor: int = 0
+    action: str = ""
+    action_title: str = "Prompt"
+    secret: bool = False
 
 
 class ShellController:
@@ -76,6 +105,12 @@ class ShellController:
         self.structure_page = 0
         self.overlay: Overlay | None = None
         self.quit = False
+        self.workspace: Workspace | None = None
+        self.database: Database | None = None
+        self.records: RecordSession | None = None
+        self.designer: DesignerSession | None = None
+        self.clipboard: list[str] = [""]
+        self.pending_path: Path | None = None
 
         if open_path is not None:
             self._open_entry(Path(open_path))
@@ -87,7 +122,11 @@ class ShellController:
 
     # -- accesso alle schermate -----------------------------------------
     def view(self) -> View:
-        if self.base == "directory":
+        if self.base == "records" and self.records is not None:
+            base = self.records.view()
+        elif self.base == "designer" and self.designer is not None:
+            base = self.designer.view()
+        elif self.base == "directory":
             base = screens.directory(
                 self.state, self.cursor, self.input_text, self.input_cursor,
                 self.first, self.theme)
@@ -108,9 +147,21 @@ class ShellController:
             return base
         if overlay.kind == "message":
             return screens.message_overlay(base, overlay.text, self.theme)
+        if overlay.kind == "confirm":
+            return screens.confirm_overlay(base, overlay.text, self.theme)
+        if overlay.kind == "prompt":
+            return screens.prompt_overlay(
+                base, overlay.action_title, overlay.text, overlay.input_text,
+                overlay.input_cursor, secret=overlay.secret, theme=self.theme)
         if overlay.kind == "submenu":
-            return screens.submenu_overlay(base, list(DESKTOP_ITEMS),
-                                           overlay.selected, self.theme)
+            title = {
+                "records": "View/Enter Records",
+                "design": "Database/set Design",
+                "utilities": "Utilities",
+            }.get(overlay.target, "Desktop Options")
+            items = overlay.items or list(DESKTOP_ITEMS)
+            return screens.submenu_overlay(base, items, overlay.selected,
+                                           self.theme, title=title)
         if overlay.kind == "history":
             return screens.history_overlay(base, self.state.history,
                                            overlay.selected, self.theme)
@@ -129,7 +180,11 @@ class ShellController:
         if self.overlay is not None:
             self._handle_overlay(key)
             return
-        if self.base == "directory":
+        if self.base == "records":
+            self._handle_records(key)
+        elif self.base == "designer":
+            self._handle_designer(key)
+        elif self.base == "directory":
             self._handle_directory(key)
         elif self.base == "structure":
             self._handle_structure(key)
@@ -166,11 +221,21 @@ class ShellController:
         elif kind == "submenu" and self.overlay is not None:
             self.overlay.selected = int(value)
             if double:
-                self._activate_desktop()
+                self._activate_overlay_item()
         elif kind == "history" and self.overlay is not None:
             self.overlay.selected = int(value)
             if double:
                 self._activate_history()
+        elif kind == "prompt" and self.overlay is not None:
+            self.overlay.input_cursor = max(
+                0, min(col - (SCREEN_WIDTH - 66) // 2 - 3,
+                        len(self.overlay.input_text)))
+        elif kind == "confirm" and self.overlay is not None:
+            self._confirm_action()
+        elif kind == "rec" and self.records is not None:
+            self.records.click_action(value, double=double)
+        elif kind == "dsn" and self.designer is not None:
+            self.designer.click_action(value)
         elif kind == "help":
             self._open_help(value, push=True)
         elif kind == "close":
@@ -252,7 +317,7 @@ class ShellController:
         elif name == "F4":
             self._open_history()
         elif name == "F5":
-            self._notice("Create database is not available yet (wave O2).")
+            self._prompt_create()
         elif name == "F6":
             self._refresh()
         elif name == "F8":
@@ -350,13 +415,31 @@ class ShellController:
         except (OSError, ValueError) as exc:
             self._notice(f"Cannot open {path.name}: {exc}")
             return
+        database = self._open_database(path)
+        if database is None:
+            return
         self.state.change_directory(path.parent)
         self.base = "menu"
         self.menu_index = 0
         self.overlay = None
         self._sync_input()
-        if current.records is None:
+        if database.locked:
+            self.pending_path = path
+            self._prompt_unlock(database)
+        elif current.records is None:
             self._notice(f"Opened {current.name} (record count unavailable).")
+
+    def _open_database(self, path: Path) -> Database | None:
+        try:
+            workspace = Workspace(path.parent)
+            database = workspace.open_database(path)
+        except (WorkspaceError, OSError) as exc:
+            self._notice(f"Cannot open {path.name}: {exc}")
+            return None
+        self.workspace = workspace
+        self.database = database
+        self.state.database = database
+        return database
 
     def _leave_directory(self) -> None:
         if self.input_text != self._selected_text():
@@ -418,10 +501,263 @@ class ShellController:
             self.quit = True
             return
         if topic_id == "choose":
-            self.overlay = Overlay("submenu")
+            self.overlay = Overlay("submenu", items=list(DESKTOP_ITEMS),
+                                   target="desktop")
+            return
+        if topic_id == "view":
+            if self.database is None:
+                self._notice("Select a database or set first.")
+                return
+            if self.database.locked:
+                self._prompt_unlock(self.database)
+                return
+            self.overlay = Overlay("submenu", items=list(RECORD_ITEMS),
+                                   target="records")
+            return
+        if topic_id == "design":
+            self.overlay = Overlay("submenu", items=list(DESIGN_ITEMS),
+                                   target="design")
+            return
+        if topic_id == "utilities":
+            self.overlay = Overlay("submenu", items=list(UTILITY_ITEMS),
+                                   target="utilities")
             return
         wave = COMMAND_WAVES.get(topic_id, "a later wave")
         self._notice(f"{label} is not available yet (wave {wave}).")
+
+    # -- records e designer ---------------------------------------------
+    def _start_records(self, mode: str) -> None:
+        if self.database is None:
+            self._notice("Select a database or set first.")
+            return
+        if self.database.locked:
+            self._prompt_unlock(self.database)
+            return
+        if mode == "recall":
+            mode = "view"
+            show_deleted = True
+        else:
+            show_deleted = False
+        self.records = RecordSession(self.database, mode, self.theme,
+                                     clipboard=self.clipboard,
+                                     show_deleted=show_deleted)
+        self.base = "records"
+        self.overlay = None
+
+    def _handle_records(self, key: Key) -> None:
+        session = self.records
+        assert session is not None
+        if key.name == "F1" and not key.alt:
+            self._open_help(session.help_topic)
+            return
+        session.handle(key)
+        if session.close:
+            self._finish_records()
+
+    def _finish_records(self) -> None:
+        self.records = None
+        self.base = "menu"
+        if self.database is not None:
+            self.state.database = self.database
+
+    def _open_designer(self, database: Database | None,
+                       name: str | None = None) -> None:
+        directory = (database.source.parent if database is not None
+                     else (self.workspace.directory if self.workspace is not None
+                           else self.state.root))
+        if database is None:
+            try:
+                workspace = Workspace(directory)
+            except (WorkspaceError, OSError) as exc:
+                self._notice(str(exc))
+                return
+            self.workspace = workspace
+            chosen = (name or "").strip().upper()
+            if chosen.endswith(".DBF"):
+                chosen = chosen[:-4]
+            if not chosen:
+                self._notice("Enter a database name.")
+                return
+        else:
+            workspace = database.workspace
+            chosen = database.name
+            self.workspace = workspace
+        self.designer = DesignerSession(workspace, chosen, database, self.theme)
+        self.base = "designer"
+        self.overlay = None
+
+    def _handle_designer(self, key: Key) -> None:
+        session = self.designer
+        assert session is not None
+        if key.name == "F1" and not key.alt:
+            self._open_help("designer")
+            return
+        session.handle(key)
+        if session.close:
+            self._finish_designer()
+
+    def _finish_designer(self) -> None:
+        session = self.designer
+        self.designer = None
+        if session is not None and session.saved_database is not None:
+            self._adopt_database(session.saved_database)
+        else:
+            self.base = "menu" if self.state.current is not None else "directory"
+
+    def _adopt_database(self, database: Database, *, path: Path | None = None) -> None:
+        self.workspace = database.workspace
+        self.database = database
+        self.state.database = database
+        target = path or database.source
+        try:
+            self.state.open(target)
+            self.state.change_directory(database.source.parent)
+        except (OSError, ValueError):
+            self.state.refresh()
+        self.base = "menu"
+        self.menu_index = 0
+        self.overlay = None
+        self._sync_input()
+
+    # -- prompt e conferme ----------------------------------------------
+    def _prompt_create(self) -> None:
+        self.overlay = Overlay(
+            "prompt", text="Enter name of new database",
+            action="create", action_title="Create Database")
+
+    def _prompt_unlock(self, database: Database) -> None:
+        self.overlay = Overlay(
+            "prompt", text=f"Enter password for {database.name}",
+            action=f"unlock:{database.name}", action_title="Password",
+            secret=True)
+
+    def _prompt_password(self) -> None:
+        if self.database is None:
+            self._notice("Select a database first.")
+            return
+        self.overlay = Overlay(
+            "prompt", text="Enter new password (blank removes it)",
+            action=f"password:{self.database.name}", action_title="Set Password",
+            secret=True)
+
+    def _submit_prompt(self) -> None:
+        overlay = self.overlay
+        assert overlay is not None
+        text = overlay.input_text.strip()
+        action = overlay.action
+        if action == "create":
+            self._open_designer(None, text)
+            return
+        if action.startswith("unlock:"):
+            name = action.split(":", 1)[1]
+            database = (self.workspace.get(name) if self.workspace is not None
+                        else None)
+            if database is None:
+                self.overlay = None
+                self._notice(f"Database {name} is no longer available.")
+                return
+            if not database.workspace.check_password(database, text):
+                self.overlay = None
+                self._notice("Incorrect password.")
+                return
+            self.database = database
+            self.state.database = database
+            self.overlay = None
+            self.base = "menu"
+            return
+        if action.startswith("password:"):
+            name = action.split(":", 1)[1]
+            database = self.database
+            if database is None or database.workspace.get(name) is None:
+                self.overlay = None
+                self._notice("Database is no longer available.")
+                return
+            database.workspace.set_password(name, text or None)
+            refreshed = database.workspace.get(name)
+            if refreshed is not None:
+                refreshed.unlocked = True
+                self.database = refreshed
+                self.state.database = refreshed
+            self.overlay = None
+            self._notice("Password removed." if not text else "Password set.")
+            return
+        self.overlay = None
+
+    def _confirm_action(self) -> None:
+        overlay = self.overlay
+        assert overlay is not None
+        action = overlay.action
+        self.overlay = None
+        if action.startswith("erase:"):
+            name = action.split(":", 1)[1]
+            workspace = (self.database.workspace if self.database is not None
+                         else self.workspace)
+            if workspace is None:
+                return
+            workspace.drop_database(name)
+            if self.database is not None and self.database.name == name:
+                self.database = None
+                self.state.database = None
+                self.state.current = None
+                try:
+                    self.state.refresh()
+                except OSError:
+                    pass
+                self.base = "directory"
+                self.cursor = self.first = self._first_file_index()
+                self._sync_input()
+            self._notice(f"Database {name} erased.")
+
+    # -- dispatch dei sottomenu -----------------------------------------
+    def _activate_overlay_item(self) -> None:
+        overlay = self.overlay
+        assert overlay is not None
+        if not overlay.items:
+            return
+        action = overlay.items[overlay.selected][1]
+        if overlay.target == "desktop":
+            self._desktop_action(action)
+        elif overlay.target == "records":
+            self._start_records(action)
+        elif overlay.target == "design":
+            self._design_action(action)
+        elif overlay.target == "utilities":
+            self._utility_action(action)
+
+    def _design_action(self, action: str) -> None:
+        if action == "create":
+            self._prompt_create()
+            return
+        if self.database is None:
+            self.overlay = None
+            self._notice("Select a database first.")
+            return
+        if action == "modify":
+            self._open_designer(self.database)
+        elif action == "erase":
+            self.overlay = Overlay(
+                "confirm", text=f"Erase database {self.database.name} and its data?",
+                action=f"erase:{self.database.name}")
+        elif action == "password":
+            self._prompt_password()
+
+    def _utility_action(self, action: str) -> None:
+        self.overlay = None
+        if action == "pack":
+            if self.database is None:
+                self._notice("Select a database first.")
+                return
+            removed = self.database.count(include_deleted=True) - self.database.count()
+            try:
+                remaining = self.database.pack()
+                self.database.workspace.save_database(self.database)
+            except (WorkspaceError, OSError) as exc:
+                self._notice(f"Cannot pack: {exc}")
+                return
+            self._notice(f"Packed {removed} deleted record(s); "
+                         f"{remaining} remain.")
+            return
+        self._notice(f"Utilities → {action} is not available yet (wave O9).")
 
     def _open_info(self, screen: str) -> None:
         if self.state.current is None:
@@ -481,14 +817,55 @@ class ShellController:
                 self.overlay = None
             return
         if overlay.kind == "submenu":
+            count = len(overlay.items) or len(DESKTOP_ITEMS)
             if name == "UP":
-                overlay.selected = (overlay.selected - 1) % len(DESKTOP_ITEMS)
+                overlay.selected = (overlay.selected - 1) % count
             elif name == "DOWN":
-                overlay.selected = (overlay.selected + 1) % len(DESKTOP_ITEMS)
+                overlay.selected = (overlay.selected + 1) % count
             elif name == "ENTER":
-                self._activate_desktop()
+                self._activate_overlay_item()
             elif name == "ESC":
                 self.overlay = None
+            return
+        if overlay.kind == "confirm":
+            if name == "ENTER":
+                self._confirm_action()
+            elif name == "ESC":
+                self.overlay = None
+            return
+        if overlay.kind == "prompt":
+            if name == "ENTER":
+                self._submit_prompt()
+            elif name == "ESC":
+                self.overlay = None
+            elif name == "LEFT":
+                overlay.input_cursor = max(0, overlay.input_cursor - 1)
+            elif name == "RIGHT":
+                overlay.input_cursor = min(len(overlay.input_text),
+                                           overlay.input_cursor + 1)
+            elif name == "HOME":
+                overlay.input_cursor = 0
+            elif name == "END":
+                overlay.input_cursor = len(overlay.input_text)
+            elif name == "BACKSPACE":
+                if overlay.input_cursor:
+                    overlay.input_text = (
+                        overlay.input_text[:overlay.input_cursor - 1]
+                        + overlay.input_text[overlay.input_cursor:])
+                    overlay.input_cursor -= 1
+            elif name == "DELETE":
+                overlay.input_text = (
+                    overlay.input_text[:overlay.input_cursor]
+                    + overlay.input_text[overlay.input_cursor + 1:])
+            else:
+                char = character(key)
+                if char:
+                    if len(char) == 1 and char.isalpha() and not key.shift:
+                        char = char.lower()
+                    overlay.input_text = (
+                        overlay.input_text[:overlay.input_cursor] + char
+                        + overlay.input_text[overlay.input_cursor:])
+                    overlay.input_cursor += 1
             return
         if overlay.kind == "history":
             history = self.state.history
@@ -531,10 +908,7 @@ class ShellController:
                 if spans and overlay.link < len(spans):
                     self._open_help(spans[overlay.link].target, push=True)
 
-    def _activate_desktop(self) -> None:
-        overlay = self.overlay
-        assert overlay is not None
-        action = DESKTOP_ITEMS[overlay.selected][1]
+    def _desktop_action(self, action: str) -> None:
         if action == "open":
             self.overlay = None
             if self.state.current is not None:
@@ -564,6 +938,21 @@ class ShellController:
         self._open_entry(path)
 
     def _to_main_menu(self) -> None:
+        if self.base == "records" and self.records is not None:
+            if self.records.memo is not None:
+                self._notice("Save or cancel the memo first.")
+                return
+            if self.records.dirty:
+                self._notice("Save the record with F10 or cancel with ESC first.")
+                return
+            self._finish_records()
+            return
+        if self.base == "designer" and self.designer is not None:
+            if self.designer.dirty:
+                self._notice("Save the database with F10 or cancel with ESC first.")
+                return
+            self._finish_designer()
+            return
         if self.overlay is not None:
             self.overlay = None
             if self.base != "menu" and self.state.current is not None:
@@ -589,6 +978,12 @@ def demo_controller() -> ShellController:
     controller.structure_page = 0
     controller.overlay = None
     controller.quit = False
+    controller.workspace = None
+    controller.database = None
+    controller.records = None
+    controller.designer = None
+    controller.clipboard = [""]
+    controller.pending_path = None
     controller.base = "menu"
     return controller
 

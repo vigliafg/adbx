@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -19,8 +20,12 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from PyQt6.QtGui import QGuiApplication  # noqa: E402
 
+from adbx.data.fields import Field  # noqa: E402
+from adbx.data.workspace import Workspace  # noqa: E402
 from adbx.render.qt_renderer import CellRenderer  # noqa: E402
 from adbx.shell import screens  # noqa: E402
+from adbx.shell.designer import DesignerSession  # noqa: E402
+from adbx.shell.records import RecordSession  # noqa: E402
 from adbx.shell.state import demo_state  # noqa: E402
 
 
@@ -51,18 +56,45 @@ def main(argv: list[str] | None = None) -> int:
     structure = screens.structure(state)
     status = screens.status_screen(state)
 
-    shots = {
-        "01-main-menu": menu,
-        "02-directory": directory,
-        "03-help": help_view,
-        "04-structure": structure,
-        "05-status": status,
-    }
-    for name, view in shots.items():
-        image = renderer.to_image(view.buffer)
-        path = out / f"{name}.png"
-        image.save(str(path))
-        print(f"{path.relative_to(ROOT)} {image.width()}x{image.height()}")
+    with tempfile.TemporaryDirectory(prefix="adbx-capture-") as temporary:
+        workspace = Workspace(temporary)
+        database = workspace.create_database("AVMOVIES", [
+            Field("TAPE_ID", "C", 4), Field("TAPE_TITLE", "C", 40),
+            Field("TAPE_DESC", "M", 10), Field("SUBJECT", "C", 20),
+            Field("RUNTIME", "N", 3, 0), Field("RATING", "C", 5),
+            Field("AVAILABLE", "L", 1), Field("RENTPRICE", "N", 4, 2),
+        ])
+        for values in (
+            {"TAPE_ID": "1006", "TAPE_TITLE": "Dumbo", "TAPE_DESC":
+             "A Disney cartoon favorite.", "SUBJECT": "Children's",
+             "RUNTIME": "64", "RATING": "NR", "AVAILABLE": "1",
+             "RENTPRICE": "2.49"},
+            {"TAPE_ID": "1007", "TAPE_TITLE": "For Your Eyes Only",
+             "TAPE_DESC": "James Bond - 007.", "SUBJECT": "Action/Adventure",
+             "RUNTIME": "127", "RATING": "PG", "AVAILABLE": "1",
+             "RENTPRICE": "2.99"},
+            {"TAPE_ID": "1001", "TAPE_TITLE": "Big Easy, The", "TAPE_DESC":
+             "A suspense set in New Orleans.", "SUBJECT": "Action/Adventure",
+             "RUNTIME": "104", "RATING": "R", "AVAILABLE": "0",
+             "RENTPRICE": "2.99"},
+        ):
+            database.append(values)
+
+        shots = {
+            "01-main-menu": menu,
+            "02-directory": directory,
+            "03-help": help_view,
+            "04-structure": structure,
+            "05-status": status,
+            "07-view-records": RecordSession(database, "view").view(),
+            "08-browse-records": RecordSession(database, "browse").view(),
+            "09-designer": DesignerSession(workspace, database.name, database).view(),
+        }
+        for name, view in shots.items():
+            image = renderer.to_image(view.buffer)
+            path = out / f"{name}.png"
+            image.save(str(path))
+            print(f"{path.relative_to(ROOT)} {image.width()}x{image.height()}")
 
     return 0
 

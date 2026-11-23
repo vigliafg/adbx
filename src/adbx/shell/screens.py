@@ -332,6 +332,45 @@ def message_overlay(base: View, text: str, theme: Theme = NEWPORT) -> View:
                         [Region(row, col, height, width, "close")], theme)
 
 
+def prompt_overlay(base: View, title: str, label: str, text: str, cursor: int, *,
+                   secret: bool = False, theme: Theme = NEWPORT) -> View:
+    """Finestra di immissione a una riga: nome database, password, conferme."""
+    width = 66
+    height = 7
+    panel = window(width, height, title, theme)
+    panel.write(2, 2, label, fg=theme.label, bg=theme.window_bg, bold=True)
+    shown = "*" * len(text) if secret else text
+    cursor = max(0, min(cursor, len(shown)))
+    visible = shown[max(0, cursor - 50):max(0, cursor - 50) + 54]
+    panel.write(3, 3, visible, fg=theme.window_fg, bg=theme.window_bg,
+                underline=True)
+    local = cursor - max(0, cursor - 50)
+    char = shown[cursor] if cursor < len(shown) else " "
+    panel.write(3, 3 + local, char, fg=1, bg=theme.window_bg, blink=True, bold=True)
+    panel.write(height - 2, 3, "ENTER Confirm   ESC Cancel",
+                fg=theme.muted, bg=theme.window_bg)
+    row = max(2, (STATUS_ROW - height) // 2)
+    col = (SCREEN_WIDTH - width) // 2
+    region = Region(row + 3, col + 3, 1, 54, "prompt")
+    return overlay_view(base, panel, row, col, [region], theme)
+
+
+def confirm_overlay(base: View, text: str, theme: Theme = NEWPORT) -> View:
+    """Conferma di un'operazione distruttiva: ENTER esegue, ESC annulla."""
+    lines = text_lines(text, 54)
+    height = len(lines) + 5
+    width = 62
+    panel = window(width, height, "Confirm", theme)
+    for offset, line in enumerate(lines):
+        panel.write(2 + offset, 2, line, fg=theme.window_fg, bg=theme.window_bg)
+    panel.write(height - 2, 2, "ENTER Confirm   ESC Cancel",
+                fg=theme.muted, bg=theme.window_bg)
+    row = max(2, (STATUS_ROW - height) // 2)
+    col = (SCREEN_WIDTH - width) // 2
+    return overlay_view(base, panel, row, col,
+                        [Region(row, col, height, width, "confirm")], theme)
+
+
 def help_overlay(base: View, topic_id: str, *, scroll: int = 0, link_index: int = 0,
                  theme: Theme = NEWPORT) -> tuple[View, list[LinkSpan], list[tuple[int, int]]]:
     """Finestra di aiuto con link; ritorna vista, span e posizioni schermo."""

@@ -9,7 +9,7 @@ finestra con una griglia di caratteri scalabile (132×43, font TrueType), su un 
 su Linux, Windows e macOS.
 
 - Licenza: MIT
-- Stato: **O1 completata** — shell con Database Directory, main menu, aiuto contestuale
+- Stato: **O2 completata** — shell, database SQLite, table designer, View/Enter/Change/Browse, memo, PACK
 - Piano completo: [`PLAN.md`](PLAN.md)
 - Diario di implementazione: [`DIARIO.md`](DIARIO.md)
 - Inventario funzionale estratto dai manuali:
@@ -19,6 +19,7 @@ su Linux, Windows e macOS.
 - Specifiche: motore a celle [`docs/spec/00-motore-celle.md`](docs/spec/00-motore-celle.md),
   scalabilità [`docs/spec/01-scalabilita.md`](docs/spec/01-scalabilita.md),
   shell [`docs/spec/02-shell.md`](docs/spec/02-shell.md),
+  dati e immissione [`docs/spec/04-dati-immissione.md`](docs/spec/04-dati-immissione.md),
   ambiente DOS di riferimento
   [`docs/spec/03-ambiente-dos-riferimento.md`](docs/spec/03-ambiente-dos-riferimento.md)
 - Schermate: [`docs/render/`](docs/render/)
@@ -46,6 +47,12 @@ La shell parte dal **Database Directory**: si sceglie un `.DBF`/`.SET`, si
 naviga con le frecce, si filtra con `*` e `?`, e con ENTER si arriva al main
 menu. `F1` apre l'aiuto contestuale, `F2`/`F3` mostrano struttura e stato,
 `ALT-F10` torna al menu, `Quit` chiude la sessione.
+
+Con **O2** i database sono vivi: `F5` nel Database Directory crea un database
+(il table designer definisce fino a 128 campi), `View/enter records` apre
+View, Enter, Change e Browse, `ALT-M` apre il memo, `ALT-D`/`ALT-U`
+cancellano e richiamano record, `Utilities → Pack` compatta. I dati stanno
+in SQLite e vengono riscritti nel `.DBF` a ogni salvataggio.
 
 ## Riferimenti
 

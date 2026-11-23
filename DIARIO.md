@@ -270,3 +270,57 @@ Formato:
   132×43; il confronto è funzionale, non pixel a pixel.
 - Prossimo passo: completare O2 (dati e immissione) e usare DOSBox-X per
   verificare le lezioni 2, 4, 5 e 6.
+
+---
+
+### 2026-11-23 — Ondata O2 — Dati e immissione
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: database veri, record veri, table designer e modalità
+  View/Browse/Enter/Change, con memo, clipboard, cancellazione logica,
+  PACK e password.
+- File toccati: nuovi `src/adbx/data/{fields,workspace}.py`,
+  `src/adbx/shell/{records,record_screens,designer}.py`, `src/adbx/data/dbf.py`
+  (lettura record, memo, scrittura DBF/DBT), `src/adbx/shell/controller.py`,
+  `screens.py`, `help.py`, `state.py`, `README.md`, `PLAN` implicito,
+  `docs/spec/04-dati-immissione.md`, `tools/capture_ui.py`,
+  `docs/render/07-view-records.png`, `08-browse-records.png`,
+  `09-designer.png`, test nuovi (`test_fields`, `test_workspace`,
+  `test_records`) e aggiornati (`test_shell_directory`, `support`).
+- Scelte:
+  - **SQLite di workspace** (`.adbx.sqlite`) con `t_<db>` e `m_<db>`, come
+    da PLAN §3.3. Il `.DBF` viene importato al primo accesso e riscritto a
+    ogni salvataggio: il file resta il formato di scambio e i dati non
+    restano prigionieri del motore.
+  - **Valori canonici** in testo: numerici `Decimal` half-up con decimali
+    fissi, date `YYYYMMDD`, logici `1/0/vuoto`. La tabella di conversione è
+    implementata caso per caso e verificata da `tests/test_fields.py`.
+  - **Table designer** a celle con F5/F6/F10: creazione da F5 del Directory,
+    modifica da `Database/set design`. I campi hanno un'identità stabile
+    (`original`) così rinomina/conversione conservano i dati; l'eliminazione
+    li perde, l'aggiunta li lascia vuoti.
+  - **Form di default** etichetta/valore, una o più colonne, in attesa del
+    form designer (O6); Browse di default a colonne larghe quanto i campi.
+    Deviazione dichiarata: l'originale usa layout progettati.
+  - **Tasti fedeli**: TAB ±10 record, CTRL-HOME/END, ALT-D/U, ALT-M,
+    ALT-F5/F6, INSERT, CTRL-BACKSPACE. `RecordSession` è indipendente da Qt,
+    quindi il playback di O10 userà gli stessi tasti.
+  - **Password** PBKDF2-SHA256, richiesta all'apertura; protegge l'accesso,
+    non cifra i file.
+  - `Erase database` elimina i file solo per i database creati da adbx; per
+    gli importati il `.DBF` resta (scelta prudente, documentata).
+- Test: `154 passed`; lint non disponibile nell'ambiente (`ruff` assente),
+  import e compilazione verificati. Accettazione lezioni 2, 4, 5 e 6 in
+  `tests/test_records.py`; conversione caso per caso in `test_fields.py`;
+  import/export DBF e memo in `test_workspace.py`. Verificato anche sui file
+  reali del Tutorial: `AVMOVIES.DBF` importa 50 record e i memo `.DBT`.
+- Screenshot: `docs/render/07-view-records.png`,
+  `08-browse-records.png`, `09-designer.png`.
+- Problemi aperti:
+  - La form generata non è un layout Alpha Four: arriverà con O6.
+  - La browse non ha ancora larghezze/ordine definiti dall'utente (O6).
+  - Il DBF viene riscritto integralmente: su database molto grandi servirà
+    una strategia incrementale (O3/O13).
+  - Il nome database è limitato a 8 caratteri DOS; il percorso può essere
+    lungo.
+- Prossimo passo: O3 — ricerca, indici, range, search/sort list.

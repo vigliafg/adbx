@@ -161,6 +161,6 @@ def test_unavailable_commands_explain_the_wave(tmp_path):
     controller = ShellController(data)
     controller.handle(Key("DOWN"))
     controller.handle(Key("ENTER"))
-    controller.handle(Key("V"))
+    controller.handle(Key("S"))
     assert controller.overlay.kind == "message"
-    assert "wave O2" in controller.overlay.text
+    assert "wave O3" in controller.overlay.text
