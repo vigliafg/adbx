@@ -395,6 +395,22 @@ class Workspace:
                 updated REAL NOT NULL,
                 PRIMARY KEY (owner, letter)
             );
+            CREATE TABLE IF NOT EXISTS adbx_letters (
+                owner TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                body TEXT NOT NULL,
+                updated REAL NOT NULL,
+                PRIMARY KEY (owner, name)
+            );
+            CREATE TABLE IF NOT EXISTS adbx_labels (
+                owner TEXT NOT NULL,
+                letter TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                definition TEXT NOT NULL,
+                updated REAL NOT NULL,
+                PRIMARY KEY (owner, letter)
+            );
             CREATE TABLE IF NOT EXISTS adbx_reports (
                 owner TEXT NOT NULL,
                 letter TEXT NOT NULL,
@@ -622,6 +638,100 @@ class Workspace:
         self._connection.commit()
         return cursor.rowcount > 0
 
+    # -- letter ----------------------------------------------------------
+    def letters(self, owner: str) -> list:
+        from .letters import LetterDefinition
+
+        result = []
+        for row in self._connection.execute(
+                "SELECT name, description, body FROM adbx_letters "
+                "WHERE owner = ? ORDER BY name", (owner.strip().upper(),)):
+            result.append(LetterDefinition(
+                self, owner, str(row["name"]), str(row["description"]),
+                str(row["body"]).splitlines() or [""]))
+        return result
+
+    def letter_names(self, owner: str) -> list[str]:
+        return [letter.label for letter in self.letters(owner)]
+
+    def get_letter(self, owner: str, name: str):
+        from .letters import LetterDefinition
+
+        row = self._connection.execute(
+            "SELECT description, body FROM adbx_letters "
+            "WHERE owner = ? AND name = ?",
+            (owner.strip().upper(), name.strip().upper())).fetchone()
+        if row is None:
+            return None
+        return LetterDefinition(self, owner, name, str(row["description"]),
+                                str(row["body"]).splitlines() or [""])
+
+    def save_letter(self, letter) -> None:
+        letter.validate()
+        self._connection.execute(
+            "INSERT INTO adbx_letters (owner, name, description, body, updated) "
+            "VALUES (?, ?, ?, ?, ?) ON CONFLICT(owner, name) DO UPDATE SET "
+            "description = excluded.description, body = excluded.body, "
+            "updated = excluded.updated",
+            (letter.owner, letter.name, letter.description, letter.text,
+             time.time()))
+        self._connection.commit()
+
+    def delete_letter(self, owner: str, name: str) -> bool:
+        cursor = self._connection.execute(
+            "DELETE FROM adbx_letters WHERE owner = ? AND name = ?",
+            (owner.strip().upper(), name.strip().upper()))
+        self._connection.commit()
+        return cursor.rowcount > 0
+
+    # -- label -----------------------------------------------------------
+    def labels(self, owner: str) -> list:
+        from .labels import LabelDefinition
+
+        owner = owner.strip().upper()
+        result = []
+        for row in self._connection.execute(
+                "SELECT definition FROM adbx_labels WHERE owner = ? "
+                "ORDER BY letter", (owner,)):
+            try:
+                result.append(LabelDefinition.from_dict(
+                    self, json.loads(row["definition"])))
+            except (ValueError, TypeError):
+                continue
+        return result
+
+    def label_names(self, owner: str) -> list[str]:
+        return [label.label for label in self.labels(owner)]
+
+    def get_label(self, owner: str, letter: str):
+        from .labels import LabelDefinition
+
+        row = self._connection.execute(
+            "SELECT definition FROM adbx_labels WHERE owner = ? AND letter = ?",
+            (owner.strip().upper(), letter.strip().upper())).fetchone()
+        if row is None:
+            return None
+        return LabelDefinition.from_dict(self, json.loads(row["definition"]))
+
+    def save_label(self, label) -> None:
+        label.validate()
+        self._connection.execute(
+            "INSERT INTO adbx_labels (owner, letter, description, definition, "
+            "updated) VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(owner, letter) DO UPDATE SET "
+            "description = excluded.description, "
+            "definition = excluded.definition, updated = excluded.updated",
+            (label.owner, label.letter, label.description,
+             json.dumps(label.to_dict()), time.time()))
+        self._connection.commit()
+
+    def delete_label(self, owner: str, letter: str) -> bool:
+        cursor = self._connection.execute(
+            "DELETE FROM adbx_labels WHERE owner = ? AND letter = ?",
+            (owner.strip().upper(), letter.strip().upper()))
+        self._connection.commit()
+        return cursor.rowcount > 0
+
     # -- report ----------------------------------------------------------
     def reports(self, owner: str) -> list:
         from .reports import ReportDefinition
@@ -739,6 +849,10 @@ class Workspace:
             "DELETE FROM adbx_forms WHERE owner = ?", (name,))
         self._connection.execute(
             "DELETE FROM adbx_reports WHERE owner = ?", (name,))
+        self._connection.execute(
+            "DELETE FROM adbx_labels WHERE owner = ?", (name,))
+        self._connection.execute(
+            "DELETE FROM adbx_letters WHERE owner = ?", (name,))
         self._connection.commit()
         return True
 
@@ -1018,6 +1132,8 @@ class Workspace:
         self._connection.execute("DELETE FROM adbx_search_lists WHERE database = ?", (name,))
         self._connection.execute("DELETE FROM adbx_field_rules WHERE owner = ?", (name,))
         self._connection.execute("DELETE FROM adbx_reports WHERE owner = ?", (name,))
+        self._connection.execute("DELETE FROM adbx_labels WHERE owner = ?", (name,))
+        self._connection.execute("DELETE FROM adbx_letters WHERE owner = ?", (name,))
         for set_row in self._connection.execute(
                 "SELECT name, primary_database FROM adbx_sets"):
             if str(set_row["primary_database"]) == name or any(

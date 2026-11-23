@@ -15,6 +15,8 @@ from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ROW
 from ..data import indexing
 from ..data import rules as field_rules
 from ..data.indexing import RECORD_NUMBER, SEARCH_PREFIX
+from ..data.labels_engine import render_labels
+from ..data.letters import render_letters
 from ..data.report_engine import render_report
 from ..data.workspace import Database, Workspace, WorkspaceError
 from ..screen.keys import Key, character
@@ -25,6 +27,8 @@ from .files import strip_wildcard
 from .forms import FormDesigner
 from .help import link_spans, topic, wrap_topic
 from .indexes import IndexSession, RangeSession
+from .labels import LabelDesigner
+from .letters import LetterEditor
 from .records import RecordSession
 from .reports import ReportDesigner, ReportPreview
 from .rules import RulesSession
@@ -88,6 +92,17 @@ LAYOUT_ITEMS: tuple[tuple[str, str], ...] = (
     ("Reports", "reports"),
     ("Mail labels", "labels"),
     ("Letters", "letters"),
+)
+
+LABEL_ITEMS: tuple[tuple[str, str], ...] = (
+    ("Create/edit a mail label", "create"),
+    ("Borrow a mail label", "borrow"),
+    ("Erase a mail label", "erase"),
+)
+
+LETTER_ITEMS: tuple[tuple[str, str], ...] = (
+    ("Create/edit a form letter", "create"),
+    ("Erase a form letter", "erase"),
 )
 
 REPORT_ITEMS: tuple[tuple[str, str], ...] = (
@@ -206,6 +221,8 @@ class ShellController:
         self.form_designer: FormDesigner | None = None
         self.report_designer: ReportDesigner | None = None
         self.report_preview: ReportPreview | None = None
+        self.label_designer: LabelDesigner | None = None
+        self.letter_editor: LetterEditor | None = None
         self.pending_index_name = ""
         self.pending_locate_text = ""
         self.pending_replace: list[str] = []
@@ -245,6 +262,10 @@ class ShellController:
             base = self.report_designer.view()
         elif self.base == "reportpreview" and self.report_preview is not None:
             base = self.report_preview.view()
+        elif self.base == "labeldesigner" and self.label_designer is not None:
+            base = self.label_designer.view()
+        elif self.base == "lettereditor" and self.letter_editor is not None:
+            base = self.letter_editor.view()
         elif self.base == "directory":
             base = screens.directory(
                 self.state, self.cursor, self.input_text, self.input_cursor,
@@ -287,6 +308,8 @@ class ShellController:
                 "layouts": "Layouts",
                 "forms": "Forms",
                 "reports": "Reports",
+                "labels": "Mail Labels",
+                "letters": "Form Letters",
                 "print": "Print",
             }.get(overlay.target, "Desktop Options")
             items = overlay.items or list(DESKTOP_ITEMS)
@@ -345,6 +368,10 @@ class ShellController:
             self._handle_report_designer(key)
         elif self.base == "reportpreview":
             self._handle_report_preview(key)
+        elif self.base == "labeldesigner":
+            self._handle_label_designer(key)
+        elif self.base == "lettereditor":
+            self._handle_letter_editor(key)
         elif self.base == "directory":
             self._handle_directory(key)
         elif self.base == "structure":
@@ -999,6 +1026,18 @@ class ShellController:
                     self.records.apply_range()
                 self._notice("Search/Sort List deleted.")
             return
+        if action.startswith("delete-label:"):
+            letter = action.split(":", 1)[1]
+            if self._workspace() is not None:
+                self._workspace().delete_label(self._form_owner(), letter)
+                self._notice(f"Label {letter} erased.")
+            return
+        if action.startswith("delete-letter:"):
+            name = action.split(":", 1)[1]
+            if self._workspace() is not None:
+                self._workspace().delete_letter(self._form_owner(), name)
+                self._notice(f"Letter {name} erased.")
+            return
         if action.startswith("delete-report:"):
             letter = action.split(":", 1)[1]
             if self._workspace() is not None:
@@ -1089,6 +1128,10 @@ class ShellController:
             self._forms_action(action)
         elif overlay.target == "reports":
             self._reports_action(action)
+        elif overlay.target == "labels":
+            self._labels_action(action)
+        elif overlay.target == "letters":
+            self._letters_action(action)
         elif overlay.target == "print":
             self._print_action(action)
 
@@ -1142,6 +1185,14 @@ class ShellController:
             self.overlay = Overlay("submenu", items=list(REPORT_ITEMS),
                                    target="reports")
             return
+        if action == "labels":
+            self.overlay = Overlay("submenu", items=list(LABEL_ITEMS),
+                                   target="labels")
+            return
+        if action == "letters":
+            self.overlay = Overlay("submenu", items=list(LETTER_ITEMS),
+                                   target="letters")
+            return
         self.overlay = None
         self._notice(f"Layouts → {action} is not available yet (later wave).")
 
@@ -1189,6 +1240,130 @@ class ShellController:
         elif session.status:
             self._notice(session.status)
 
+    # -- label -----------------------------------------------------------
+    def _labels_action(self, action: str) -> None:
+        workspace = self._workspace()
+        owner = self._form_owner()
+        if workspace is None or not owner:
+            self._notice("Select a database or set first.")
+            return
+        if action == "create":
+            self.label_designer = LabelDesigner(
+                workspace, self.database, owner=owner, theme=self.theme)
+            self.overlay = None
+            self.base = "labeldesigner"
+            return
+        labels = workspace.labels(owner)
+        if action in ("borrow", "erase"):
+            if not labels:
+                self._notice("There are no labels for this database or set.")
+                return
+            items = [(label.label, label.letter) for label in labels]
+            self.overlay = Overlay(
+                "choose", text="Mail labels", items=items,
+                action="borrow-label" if action == "borrow" else
+                "erase-label")
+
+    def _handle_label_designer(self, key: Key) -> None:
+        session = self.label_designer
+        assert session is not None
+        if key.name == "F1" and not key.alt and session.picker is None:
+            self._open_help("labels")
+            return
+        session.handle(key)
+        if session.close:
+            self._finish_label_designer()
+
+    def _finish_label_designer(self) -> None:
+        session = self.label_designer
+        self.label_designer = None
+        self.base = "menu"
+        if session is None:
+            return
+        if session.preview_request and session.saved_label is not None:
+            self._open_label_preview(session.saved_label)
+            return
+        if session.saved and session.saved_label is not None:
+            self._notice(f"Label {session.saved_label.letter} saved.")
+        elif session.status:
+            self._notice(session.status)
+
+    def _open_label_preview(self, label) -> None:
+        workspace = self._workspace()
+        if workspace is None:
+            return
+        try:
+            output = render_labels(label, workspace)
+        except ValueError as exc:
+            self._notice(f"Label not printable: {exc}")
+            return
+        target = workspace.directory / f"{label.owner}-{label.letter}.pdf"
+        self.report_preview = ReportPreview(
+            output, label.label, theme=self.theme, pdf_path=target)
+        self.base = "reportpreview"
+        self.overlay = None
+
+    # -- letter ----------------------------------------------------------
+    def _letters_action(self, action: str) -> None:
+        workspace = self._workspace()
+        owner = self._form_owner()
+        if workspace is None or not owner:
+            self._notice("Select a database or set first.")
+            return
+        if action == "create":
+            self.letter_editor = LetterEditor(
+                workspace, self.database, owner=owner, theme=self.theme)
+            self.overlay = None
+            self.base = "lettereditor"
+            return
+        letters = workspace.letters(owner)
+        if action == "erase":
+            if not letters:
+                self._notice("There are no letters for this database or set.")
+                return
+            items = [(letter.label, letter.name) for letter in letters]
+            self.overlay = Overlay("choose", text="Form letters", items=items,
+                                   action="erase-letter")
+
+    def _handle_letter_editor(self, key: Key) -> None:
+        session = self.letter_editor
+        assert session is not None
+        if key.name == "F1" and not key.alt and session.picker is None:
+            self._open_help("letters")
+            return
+        session.handle(key)
+        if session.close:
+            self._finish_letter_editor()
+
+    def _finish_letter_editor(self) -> None:
+        session = self.letter_editor
+        self.letter_editor = None
+        self.base = "menu"
+        if session is None:
+            return
+        if session.preview_request and session.saved_letter is not None:
+            self._open_letter_preview(session.saved_letter)
+            return
+        if session.saved and session.saved_letter is not None:
+            self._notice(f"Letter {session.saved_letter.name} saved.")
+        elif session.status:
+            self._notice(session.status)
+
+    def _open_letter_preview(self, letter) -> None:
+        workspace = self._workspace()
+        if workspace is None:
+            return
+        try:
+            output = render_letters(letter, workspace)
+        except ValueError as exc:
+            self._notice(f"Letter not printable: {exc}")
+            return
+        target = workspace.directory / f"{letter.owner}-{letter.name}.pdf"
+        self.report_preview = ReportPreview(
+            output, letter.label, theme=self.theme, pdf_path=target)
+        self.base = "reportpreview"
+        self.overlay = None
+
     # -- report ----------------------------------------------------------
     def _reports_action(self, action: str) -> None:
         workspace = self._workspace()
@@ -1216,22 +1391,39 @@ class ShellController:
 
     def _print_action(self, action: str) -> None:
         self.overlay = None
-        if action != "report":
-            self._notice("Printing forms, browse tables, labels and letters "
-                         "arrives with O8/O12.")
-            return
         workspace = self._workspace()
         owner = self._form_owner()
         if workspace is None or not owner:
             self._notice("Select a database or set first.")
             return
-        reports = workspace.reports(owner)
-        if not reports:
-            self._notice("There are no reports for this database or set.")
+        if action == "report":
+            reports = workspace.reports(owner)
+            if not reports:
+                self._notice("There are no reports for this database or set.")
+                return
+            items = [(report.label, report.letter) for report in reports]
+            self.overlay = Overlay("choose", text="Print report", items=items,
+                                   action="print-report")
             return
-        items = [(report.label, report.letter) for report in reports]
-        self.overlay = Overlay("choose", text="Print report", items=items,
-                               action="print-report")
+        if action == "labels":
+            labels = workspace.labels(owner)
+            if not labels:
+                self._notice("There are no labels for this database or set.")
+                return
+            items = [(label.label, label.letter) for label in labels]
+            self.overlay = Overlay("choose", text="Print mail labels",
+                                   items=items, action="print-label")
+            return
+        if action == "letters":
+            letters = workspace.letters(owner)
+            if not letters:
+                self._notice("There are no letters for this database or set.")
+                return
+            items = [(letter.label, letter.name) for letter in letters]
+            self.overlay = Overlay("choose", text="Print form letter",
+                                   items=items, action="print-letter")
+            return
+        self._notice("Printing forms and browse tables arrives with O12.")
 
     def _open_report_preview(self, report) -> None:
         workspace = self._workspace()
@@ -1836,6 +2028,40 @@ class ShellController:
                 theme=self.theme)
             self.base = "setdesigner"
             return
+        if action in ("borrow-label", "erase-label", "print-label"):
+            workspace = self._workspace()
+            if workspace is None:
+                return
+            label = workspace.get_label(self._form_owner(), value)
+            if label is None:
+                return
+            if action == "print-label":
+                self._open_label_preview(label)
+            elif action == "erase-label":
+                self.overlay = Overlay(
+                    "confirm", text=f"Erase label {value}?",
+                    action=f"delete-label:{value}")
+            else:
+                self.label_designer = LabelDesigner(
+                    workspace, self.database, owner=self._form_owner(),
+                    label=label, theme=self.theme, stage="borrow_letter",
+                    letter_text="", edit_existing=False)
+                self.base = "labeldesigner"
+            return
+        if action in ("print-letter", "erase-letter"):
+            workspace = self._workspace()
+            if workspace is None:
+                return
+            letter = workspace.get_letter(self._form_owner(), value)
+            if letter is None:
+                return
+            if action == "print-letter":
+                self._open_letter_preview(letter)
+            else:
+                self.overlay = Overlay(
+                    "confirm", text=f"Erase letter {value}?",
+                    action=f"delete-letter:{value}")
+            return
         if action in ("borrow-report", "erase-report", "print-report"):
             workspace = self._workspace()
             if workspace is None:
@@ -2256,6 +2482,14 @@ class ShellController:
             self.report_preview = None
             self.base = "menu"
             return
+        if self.base == "labeldesigner" and self.overlay is None:
+            self.label_designer = None
+            self.base = "menu"
+            return
+        if self.base == "lettereditor" and self.overlay is None:
+            self.letter_editor = None
+            self.base = "menu"
+            return
         if self.base in ("setrecords", "setdesigner") and self.overlay is None:
             if self.base == "setrecords":
                 self.set_records = None
@@ -2326,6 +2560,8 @@ def demo_controller() -> ShellController:
     controller.form_designer = None
     controller.report_designer = None
     controller.report_preview = None
+    controller.label_designer = None
+    controller.letter_editor = None
     controller.set_designer = None
     controller.set_records = None
     controller.active_set = None

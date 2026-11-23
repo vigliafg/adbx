@@ -9,7 +9,7 @@ finestra con una griglia di caratteri scalabile (132×43, font TrueType), su un 
 su Linux, Windows e macOS.
 
 - Licenza: MIT
-- Stato: **O7 completata** — report engine con sezioni, gruppi, summary, multipass, anteprima e PDF
+- Stato: **O8 completata** — etichette con giustificazioni avanzate e lettere con condizionali e include
 - Piano completo: [`PLAN.md`](PLAN.md)
 - Diario di implementazione: [`DIARIO.md`](DIARIO.md)
 - Inventario funzionale estratto dai manuali:
@@ -25,6 +25,7 @@ su Linux, Windows e macOS.
   set e regioni [`docs/spec/07-set.md`](docs/spec/07-set.md),
   form designer [`docs/spec/08-form.md`](docs/spec/08-form.md),
   report engine [`docs/spec/09-report.md`](docs/spec/09-report.md),
+  etichette e lettere [`docs/spec/10-etichette-lettere.md`](docs/spec/10-etichette-lettere.md),
   ambiente DOS di riferimento
   [`docs/spec/03-ambiente-dos-riferimento.md`](docs/spec/03-ambiente-dos-riferimento.md)
 - Schermate: [`docs/render/`](docs/render/)
@@ -103,6 +104,17 @@ migliaia, numeri in lettere, date). `F10 → Save and preview` mostra
 l'anteprima; `P`/`F10` scrive un PDF; `Print → Report` stampa un report
 salvato. La stessa sezione `Detail` lunga quanto il modulo e i formati `$*` /
 `X$F` coprono i check writing.
+
+Con **O8** si stampano anche etichette e lettere. `Layouts → Mail labels`
+progetta fino a 26 layout da 10–78 colonne e 1–20 righe, fino a sei etichette
+per riga, con copie per record e le giustificazioni avanzate `Suppress`,
+`Float`, `Trim`, `Join`, `Before` e `After`; le righe vuote spariscono, quelle
+forzate con `CHR(127)` restano. `Layouts → Letters` è un editor di lettere con
+marcatori `[CAMPO]`, `[{espressione}]`, `[?prompt]`, comandi `[.WIDTH]`,
+`[.LEFT]`, `[.TOP]`, `[.FILL+]`, `[.EJECT]`, `[.INCLUDE]`, `[@codici]` e
+condizionali `[.IF]` / `[.ELSEIF]` / `[.ELSE]` / `[.ENDIF]` annidati. Sia le
+etichette sia le lettere si vedono in anteprima, si stampano in PDF e si
+stampano da `Print`.
 
 ## Riferimenti
 

@@ -30,6 +30,9 @@ from adbx.data.forms import (  # noqa: E402
     FormLabel,
     FormRegion,
 )
+from adbx.data.labels import LabelDefinition, LabelField, LabelText  # noqa: E402
+from adbx.data.labels_engine import render_labels  # noqa: E402
+from adbx.data.letters import LetterDefinition, render_letters  # noqa: E402
 from adbx.data.report_engine import render_report  # noqa: E402
 from adbx.data.reports import (  # noqa: E402
     ReportCalc,
@@ -47,6 +50,8 @@ from adbx.shell import screens  # noqa: E402
 from adbx.shell.designer import DesignerSession  # noqa: E402
 from adbx.shell.forms import FormDesigner  # noqa: E402
 from adbx.shell.indexes import IndexSession, RangeSession  # noqa: E402
+from adbx.shell.labels import LabelDesigner  # noqa: E402
+from adbx.shell.letters import LetterEditor  # noqa: E402
 from adbx.shell.records import RecordSession  # noqa: E402
 from adbx.shell.reports import ReportDesigner, ReportPreview  # noqa: E402
 from adbx.shell.rules import (  # noqa: E402
@@ -320,6 +325,60 @@ def main(argv: list[str] | None = None) -> int:
         report_preview = ReportPreview(
             report_output, movie_report.label,
             pdf_path=workspace.directory / "AVMOVIES-A.pdf")
+
+        movie_label = LabelDefinition(workspace, "AVMOVIES", "A",
+                                      "Movie shelf labels", 40, 6, 2, 2, 1)
+        movie_label.fields = [
+            LabelField(1, 1, "AVMOVIES.TAPE_ID", length=5),
+            LabelField(1, 7, "AVMOVIES.TAPE_TITLE", length=32),
+            LabelField(2, 1, "AVMOVIES.SUBJECT", length=20),
+            LabelField(2, 22, "AVMOVIES.RUNTIME", length=6,
+                       justification="Right"),
+            LabelField(4, 1, "AVMOVIES.RENTPRICE", length=8, format="$",
+                       justification="Right"),
+        ]
+        movie_label.texts = [
+            LabelText(1, 5, " "),
+            LabelText(3, 1, chr(127)),
+            LabelText(5, 1, "Alpha Video"),
+        ]
+        movie_label.save()
+        label_designer = LabelDesigner(
+            workspace, database, owner="AVMOVIES", label=movie_label,
+            stage="layout")
+        label_designer.row = 2
+        label_designer.col = 1
+        label_preview = ReportPreview(
+            render_labels(movie_label, workspace), movie_label.label,
+            pdf_path=workspace.directory / "AVMOVIES-A-label.pdf")
+
+        movie_letter = LetterDefinition(
+            workspace, "AVMOVIES", "MOVNOTE", "Movie note", [
+                "[SYSTEM->DATE]",
+                "",
+                "Dear movie fan,",
+                "",
+                "You are holding [TAPE_TITLE].",
+                "Subject: [SUBJECT]  Runtime: [RUNTIME] minutes.",
+                "",
+                "[.IF AVAILABLE = .T.]",
+                "This title is available for rental at [RENTPRICE.$].",
+                "[.ELSE]",
+                "This title is currently rented out.",
+                "[.ENDIF]",
+                "",
+                "Enjoy the show!",
+                "",
+                "The Gang at Alpha Video",
+            ])
+        movie_letter.save()
+        letter_editor = LetterEditor(
+            workspace, database, owner="AVMOVIES", letter=movie_letter)
+        letter_editor.row = 4
+        letter_editor.col = 14
+        letter_preview = ReportPreview(
+            render_letters(movie_letter, workspace), movie_letter.label,
+            pdf_path=workspace.directory / "AVMOVIES-MOVNOTE.pdf")
         lookup_record = RecordSession(database, "enter")
         lookup_record.field_index = 3
         lookup_record._load_field()
@@ -359,6 +418,10 @@ def main(argv: list[str] | None = None) -> int:
             "25-report-designer": report_designer.view(),
             "26-report-preview": report_preview.view(),
             "27-report-grouping": report_grouping.view(),
+            "28-label-designer": label_designer.view(),
+            "29-label-preview": label_preview.view(),
+            "30-letter-editor": letter_editor.view(),
+            "31-letter-preview": letter_preview.view(),
         }
         for name, view in shots.items():
             image = renderer.to_image(view.buffer)

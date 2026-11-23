@@ -568,3 +568,51 @@ Formato:
   - Niente stampante diretta, driver o caratteri compressi: solo anteprima e
     PDF.
 - Prossimo passo: O8 — etichette e lettere.
+
+---
+
+### 2026-11-23 — Ondata O8 — Etichette e lettere
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: stampare etichette con griglia e giustificazioni avanzate, e
+  lettere con campi, comandi, condizionali, include e prompt.
+- File toccati: nuovi `src/adbx/data/labels.py` (modello, parametri, campi,
+  calcolati, validazione), `src/adbx/data/labels_engine.py` (griglia, copie,
+  soppressione righe, Suppress/Float/Trim/Join/Before/After),
+  `src/adbx/data/letters.py` (modello, parser comandi e marker, condizionali,
+  include, paginazione), `src/adbx/shell/labels.py` (Label Designer),
+  `src/adbx/shell/letters.py` (editor), specifica
+  `docs/spec/10-etichette-lettere.md`, screenshot `28-label-designer.png`,
+  `29-label-preview.png`, `30-letter-editor.png`, `31-letter-preview.png`;
+  aggiornati `workspace.py` (`adbx_labels`, `adbx_letters`), `controller.py`
+  (Layouts → Mail labels/Letters, Print → Mail labels/Letters, preview),
+  `help.py`, `README.md`, `tools/capture_ui.py`; test nuovi `test_labels`,
+  `test_letters`, `test_output_ui`.
+- Scelte:
+  - **Etichette e lettere in SQLite**, non file `.LNx`/`.LTR`.
+  - **Griglia etichette**: width 10–78, height 1–20, across 1–6, gap
+    orizzontale/verticale, copie da numero/campo/espressione, margini,
+    continuous feed o righe per pagina.
+  - **Giustificazioni avanzate** implementate con un cursore di shift per
+    riga: `Suppress`/`Before`/`After` sopprimono gli spazi finali e spostano
+    il seguito, `Float` sposta il campo senza spostare il testo seguente,
+    `Trim` ignora lo shift precedente, `Join` porta con sé il testo.
+  - **Lettere**: marker `[FIELD]`, `[DB->FIELD]`, `[SYSTEM->DATE]`,
+    `[{expr}]`, `[?prompt]`; opzioni S/L/R/C/N/D/X/$/`,` e
+    `:lunghezza.decimali`; comandi WIDTH/LEFT/TOP/BOTTOM/FILL/EJECT/INCLUDE/
+    `[@codici]`; condizionali IF/ELSEIF/ELSE/ENDIF annidati.
+  - **Fill mode**: paragrafi di solo testo riscritti alla larghezza, righe con
+    campi mantenute separate per indirizzi e righe strutturate.
+  - **Anteprima e PDF** con lo stesso visualizzatore dei report; Print →
+    Mail labels/Letters.
+- Test: **301 passed**; `uvx ruff check src tests tools` pulito;
+  `./start.sh --smoke` e `--version` verdi. Accettazione lezione 17 in
+  `test_labels` e lezione 18 in `test_letters`.
+- Problemi aperti / deviazioni dichiarate:
+  - Niente `.LNx`/`.LTR`, test pattern di allineamento o pausa fogli singoli.
+  - Continuous feed produce una pagina continua; la stampante reale è O12.
+  - I codici `[@...]` sono rimossi, non inviati alla stampante.
+  - I prompt usano una mappa fornita dal chiamante; manca il dialogo
+    interattivo per lettera.
+  - L'editor non ha block copy/move né clipboard delle lettere.
+- Prossimo passo: O9 — Utility e I/O.
