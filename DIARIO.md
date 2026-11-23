@@ -49,3 +49,47 @@ Formato:
   durante O10; mappatura dei colori di campo 0–255 da fissare in O0.
 - Prossimo passo: O0 — motore a celle, font CP437, input, harness di
   rendering.
+
+---
+
+### 2026-11-23 — Ondata O0 — Motore a celle
+- Stato: completata
+- Branch/commit: `main`; commit `O0: introdurre motore a celle, font e tastiera`.
+- Obiettivo: fondamenta del clone: griglia 80×25, font CP437, renderer Qt,
+  scene a strati, tastiera canonica, dump golden, CI.
+- File toccati: `src/adbx/cell/{buffer,attrs,cp437,font}.py`,
+  `src/adbx/screen/{keys,scene,demo,qt_input}.py`,
+  `src/adbx/render/qt_renderer.py`, `src/adbx/{app,__main__}.py`,
+  `src/adbx/data/cp437_8x16.bin`, `src/adbx/data/LICENSE-font.txt`,
+  `tools/build_font.py`, `tools/capture_ui.py`,
+  `tests/{conftest,test_cp437,test_buffer,test_font,test_keys,test_scene,test_render,test_shell,test_cli}.py`,
+  `tests/golden/main-menu.txt`, `docs/spec/00-motore-celle.md`,
+  `docs/render/*.png`, `.github/workflows/ci.yml`, `pyproject.toml`, `DIARIO.md`.
+- Scelte:
+  - **Font**: tabella bitmap 8×16 generata da DejaVu Sans Mono; i caratteri
+    grafici (cornici, blocchi, retinature) sono **disegnati proceduralmente**
+    perché il font tipografico lascia un pixel di vuoto ai bordi della cella e
+    le linee risultavano tratteggiate. Verticale singola a `x=3`, orizzontale
+    a `y=7`; doppia a `x=2,4` e `y=6,8`.
+  - **Colori**: 16 VGA + bold/blink; i valori 0–255 dei form sono ridotti con
+    `indice % 16` (regola provvisoria, da sostituire con la palette `A4.PAL`).
+  - **Strati**: una schermata è una pila di `CellBuffer` con origine; il popup
+    include la propria ombra nel buffer (`width+1 × height+1`), così
+    l'ombra non viene tagliata e il compositore resta banale.
+  - **Tastiera**: `Key(name, ctrl, alt, shift)` con notazione `alt-f`, `f10`,
+    `{ENTER}` — la stessa che userà il motore di script per digitare.
+  - **Dump golden**: riga di caratteri + run-length degli attributi
+    (`count@fg,bg,bold,blink`), leggibile in diff.
+- Test: `69 passed` (buffer, CP437, font, tasti, scene, rendering offscreen,
+  CLI, golden screen). `python -m adbx --smoke` verde; `tools/capture_ui.py`
+  produce `01-main-menu.png` e `02-popup.png` a 1280×800.
+- Screenshot: `docs/render/01-main-menu.png`, `docs/render/02-popup.png`,
+  `docs/render/font-cp437.png`.
+- Problemi aperti:
+  - La mappatura 0–255 → 16 colori è provvisoria; va chiusa con la palette
+    originale prima di O6 (colori per campo nei form).
+  - Il font tipografico ha il glifo un pixel più in basso del centro cella:
+    accettabile, da valutare quando arriveranno i form veri.
+  - La schermata dimostrativa è provvisoria: in O1 diventa il main menu reale.
+- Prossimo passo: O1 — shell: main menu a 12 comandi con hot key, status box,
+  browser di directory, help `F1` contestuale, `Quit`.

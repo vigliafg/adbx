@@ -1,0 +1,51 @@
+adbx 80x25
+ Current database : C:\ADBX\DATA\AVMOVIES         Records in database   44      
+80@0,8,0,0
+ Primary index : by Record Number                 Set : (none)                  
+80@0,8,0,0
+                                                                                
+80@7,1,0,0
+                                                                                
+80@7,1,0,0
+    View/enter records              Print                                       
+4@7,1,0,0 18@0,3,0,0 14@7,1,0,0 1@7,1,1,0 43@7,1,0,0
+    Search/sort lists               Indexes/ranges                              
+4@7,1,0,0 1@7,1,1,0 31@7,1,0,0 1@7,1,1,0 43@7,1,0,0
+    Global update/delete            Choose database/set                         
+4@7,1,0,0 1@7,1,1,0 31@7,1,0,0 1@7,1,1,0 43@7,1,0,0
+    Database/set design             Layouts                                     
+4@7,1,0,0 1@7,1,1,0 31@7,1,0,0 1@7,1,1,0 43@7,1,0,0
+    Applications                    Utilities                                   
+4@7,1,0,0 1@7,1,1,0 31@7,1,0,0 1@7,1,1,0 43@7,1,0,0
+    Other                           Quit                                        
+4@7,1,0,0 1@7,1,1,0 31@7,1,0,0 1@7,1,1,0 43@7,1,0,0
+                                                                                
+80@7,1,0,0
+                                                                                
+80@7,1,0,0
+                                                                                
+80@7,1,0,0
+                                                                                
+80@7,1,0,0
+                                                                                
+80@7,1,0,0
+                                                                                
+80@7,1,0,0
+                                                                                
+80@7,1,0,0
+                                                                                
+80@7,1,0,0
+                                                                                
+80@7,1,0,0
+                                                                                
+80@7,1,0,0
+                                                                                
+80@7,1,0,0
+                                                                                
+80@7,1,0,0
+ View               Record : 1/44                           adbx 0.1.0          
+80@0,3,0,0
+ Display records from the current database or set                               
+80@14,0,0,0
+ F1 Help   F10 Continue   ALT-F10 MainMenu   ALT-F3 Scripts                     
+80@0,8,0,0

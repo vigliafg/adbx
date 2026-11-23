@@ -1,0 +1,168 @@
+"""Buffer di celle: l'unica primitiva grafica del programma.
+
+Non esistono widget: una schermata e' una matrice `width x height` di `Cell`.
+Tutto il resto (form, popup, regioni, report) scrive in un buffer.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+
+from .attrs import DEFAULT_BG, DEFAULT_FG, bright, resolve_color
+from .cp437 import DOUBLE, SHADE_LIGHT, SINGLE
+
+SCREEN_WIDTH = 80
+SCREEN_HEIGHT = 25
+WORK_ROWS = 22  # righe 1-22; 23 status, 24 help, 25 menu
+
+
+@dataclass(frozen=True, slots=True)
+class Cell:
+    ch: str = " "
+    fg: int = DEFAULT_FG
+    bg: int = DEFAULT_BG
+    blink: bool = False
+    bold: bool = False
+
+    def styled(self, *, fg: int | None = None, bg: int | None = None,
+               blink: bool | None = None, bold: bool | None = None) -> "Cell":
+        return replace(
+            self,
+            fg=self.fg if fg is None else resolve_color(fg),
+            bg=self.bg if bg is None else resolve_color(bg),
+            blink=self.blink if blink is None else blink,
+            bold=self.bold if bold is None else bold,
+        )
+
+
+BLANK = Cell()
+SHADOW = Cell(SHADE_LIGHT, fg=0, bg=0)
+
+
+class CellBuffer:
+    """Matrice di celle con clipping silenzioso, come il video originale."""
+
+    __slots__ = ("width", "height", "_cells")
+
+    def __init__(self, width: int = SCREEN_WIDTH, height: int = SCREEN_HEIGHT,
+                 fill: Cell = BLANK) -> None:
+        if width <= 0 or height <= 0:
+            raise ValueError("dimensioni non valide")
+        self.width = width
+        self.height = height
+        self._cells: list[list[Cell]] = [[fill] * width for _ in range(height)]
+
+    # -- accesso ---------------------------------------------------------
+    def get(self, row: int, col: int) -> Cell:
+        if 0 <= row < self.height and 0 <= col < self.width:
+            return self._cells[row][col]
+        return BLANK
+
+    def put(self, row: int, col: int, cell: Cell) -> None:
+        if 0 <= row < self.height and 0 <= col < self.width:
+            self._cells[row][col] = cell
+
+    def clear(self, cell: Cell = BLANK) -> None:
+        for row in range(self.height):
+            self._cells[row] = [cell] * self.width
+
+    # -- scrittura -------------------------------------------------------
+    def write(self, row: int, col: int, text: str, *,
+              fg: int | None = None, bg: int | None = None,
+              blink: bool | None = None, bold: bool | None = None,
+              limit: int | None = None) -> int:
+        """Scrive testo e ritorna la colonna successiva (clippata)."""
+        if not 0 <= row < self.height:
+            return col
+        style = self.get(row, col).styled(fg=fg, bg=bg, blink=blink, bold=bold)
+        count = 0
+        for offset, char in enumerate(text):
+            if limit is not None and offset >= limit:
+                break
+            target = col + offset
+            if target >= self.width:
+                break
+            if target >= 0:
+                self._cells[row][target] = replace(style, ch=char)
+            count = offset + 1
+        return col + count
+
+    def fill_rect(self, row: int, col: int, height: int, width: int,
+                  char: str = " ", *, fg: int | None = None, bg: int | None = None,
+                  blink: bool | None = None, bold: bool | None = None) -> None:
+        for r in range(row, min(row + height, self.height)):
+            if r < 0:
+                continue
+            for c in range(col, min(col + width, self.width)):
+                if c < 0:
+                    continue
+                self._cells[r][c] = self._cells[r][c].styled(
+                    fg=fg, bg=bg, blink=blink, bold=bold
+                )
+                self._cells[r][c] = replace(self._cells[r][c], ch=char)
+
+    # -- disegno ---------------------------------------------------------
+    def hline(self, row: int, col: int, width: int, char: str = "─", **style) -> None:
+        self.write(row, col, char * max(width, 0), **style)
+
+    def vline(self, row: int, col: int, height: int, char: str = "│", **style) -> None:
+        for r in range(row, row + height):
+            self.write(r, col, char, **style)
+
+    def box(self, row: int, col: int, height: int, width: int, *,
+            double: bool = False, **style) -> None:
+        """Cornice di `height` righe per `width` colonne (bordi inclusi)."""
+        if height < 2 or width < 2:
+            return
+        set_ = DOUBLE if double else SINGLE
+        self.write(row, col, set_["tl"] + set_["h"] * (width - 2) + set_["tr"], **style)
+        for r in range(row + 1, row + height - 1):
+            self.write(r, col, set_["v"], **style)
+            self.write(r, col + width - 1, set_["v"], **style)
+        self.write(row + height - 1, col,
+                   set_["bl"] + set_["h"] * (width - 2) + set_["br"], **style)
+
+    def shadow(self, row: int, col: int, height: int, width: int) -> None:
+        """Ombra in basso a destra, come i popup originali."""
+        for c in range(col + 1, col + width + 1):
+            self.put(row + height, c, SHADOW)
+        for r in range(row + 1, row + height + 1):
+            self.put(r, col + width, SHADOW)
+
+    # -- output ----------------------------------------------------------
+    def to_lines(self) -> list[str]:
+        return ["".join(cell.ch for cell in row) for row in self._cells]
+
+    def dump(self) -> str:
+        """Rappresentazione testuale stabile per i test golden."""
+        out = [f"adbx {self.width}x{self.height}"]
+        for row in self._cells:
+            out.append("".join(cell.ch for cell in row))
+            runs: list[str] = []
+            current = row[0]
+            count = 1
+            for cell in row[1:]:
+                key = (cell.fg, cell.bg, cell.bold, cell.blink)
+                other = (current.fg, current.bg, current.bold, current.blink)
+                if key == other:
+                    count += 1
+                    continue
+                runs.append(f"{count}@{current.fg},{current.bg},{int(current.bold)},{int(current.blink)}")
+                current = cell
+                count = 1
+            runs.append(f"{count}@{current.fg},{current.bg},{int(current.bold)},{int(current.blink)}")
+            out.append(" ".join(runs))
+        return "\n".join(out) + "\n"
+
+    # -- utilita' --------------------------------------------------------
+    def text_of(self, row: int, col: int = 0, width: int | None = None) -> str:
+        width = self.width - col if width is None else width
+        return "".join(self.get(row, c).ch for c in range(col, min(col + width, self.width))).rstrip()
+
+
+def styled_text(cell: Cell, text: str) -> list[Cell]:
+    return [replace(cell, ch=ch) for ch in text]
+
+
+def bold_color(color: int) -> int:
+    return bright(color)

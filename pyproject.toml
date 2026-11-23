@@ -28,6 +28,9 @@ adbx = "adbx.__main__:main"
 where = ["src"]
 include = ["adbx*"]
 
+[tool.setuptools.package-data]
+adbx = ["data/*.bin", "data/*.txt"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
