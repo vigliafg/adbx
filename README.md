@@ -9,7 +9,7 @@ finestra con una griglia di caratteri scalabile (132×43, font TrueType), su un 
 su Linux, Windows e macOS.
 
 - Licenza: MIT
-- Stato: **O2 completata** — shell, database SQLite, table designer, View/Enter/Change/Browse, memo, PACK
+- Stato: **O3 completata** — indici, range, search/sort list, Find/Locate, sostituzione e duplicati
 - Piano completo: [`PLAN.md`](PLAN.md)
 - Diario di implementazione: [`DIARIO.md`](DIARIO.md)
 - Inventario funzionale estratto dai manuali:
@@ -20,6 +20,7 @@ su Linux, Windows e macOS.
   scalabilità [`docs/spec/01-scalabilita.md`](docs/spec/01-scalabilita.md),
   shell [`docs/spec/02-shell.md`](docs/spec/02-shell.md),
   dati e immissione [`docs/spec/04-dati-immissione.md`](docs/spec/04-dati-immissione.md),
+  ricerca e indici [`docs/spec/05-ricerca-indici.md`](docs/spec/05-ricerca-indici.md),
   ambiente DOS di riferimento
   [`docs/spec/03-ambiente-dos-riferimento.md`](docs/spec/03-ambiente-dos-riferimento.md)
 - Schermate: [`docs/render/`](docs/render/)
@@ -53,6 +54,13 @@ Con **O2** i database sono vivi: `F5` nel Database Directory crea un database
 View, Enter, Change e Browse, `ALT-M` apre il memo, `ALT-D`/`ALT-U`
 cancellano e richiamano record, `Utilities → Pack` compatta. I dati stanno
 in SQLite e vengono riscritti nel `.DBF` a ogni salvataggio.
+
+Con **O3** si cerca e si ordina: `Indexes/ranges` crea indici anche a più
+livelli, sceglie il primary index e salva fino a 26 range; `Search/sort lists`
+costruisce liste one-time o salvate in Table/Expression mode, con storia e
+marcatura `♦` quando sono out of date; in View/Browse `F` è Find, `L` è
+Locate, `I` è l'indice, `R` il range, e in View `S` sostituisce un testo.
+`Global update/delete → Delete duplicate records` usa l'indice primario.
 
 ## Riferimenti
 

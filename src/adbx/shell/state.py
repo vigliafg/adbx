@@ -102,6 +102,30 @@ class ShellState:
         return str(self.current.records)
 
     @property
+    def primary_index_label(self) -> str:
+        if self.database is not None:
+            from ..data import indexing
+            return indexing.primary_label(self.database)
+        return "Record Number"
+
+    @property
+    def records_in_list_text(self) -> str:
+        if self.database is None:
+            return ""
+        from ..data import indexing
+        search_id = None
+        primary = self.database.primary_index
+        if primary.startswith(indexing.SEARCH_PREFIX):
+            try:
+                search_id = int(primary[len(indexing.SEARCH_PREFIX):])
+            except ValueError:
+                return ""
+        if search_id is None:
+            return ""
+        search = indexing.get_search_list(self.database, search_id)
+        return str(len(search.seqs)) if search is not None else ""
+
+    @property
     def default_types_text(self) -> str:
         return "*.SET, *.DBF"
 

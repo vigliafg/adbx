@@ -20,12 +20,16 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from PyQt6.QtGui import QGuiApplication  # noqa: E402
 
+from adbx.data import indexing  # noqa: E402
+from adbx.data.expressions import SearchRow  # noqa: E402
 from adbx.data.fields import Field  # noqa: E402
 from adbx.data.workspace import Workspace  # noqa: E402
 from adbx.render.qt_renderer import CellRenderer  # noqa: E402
 from adbx.shell import screens  # noqa: E402
 from adbx.shell.designer import DesignerSession  # noqa: E402
+from adbx.shell.indexes import IndexSession, RangeSession  # noqa: E402
 from adbx.shell.records import RecordSession  # noqa: E402
+from adbx.shell.searching import SearchSession  # noqa: E402
 from adbx.shell.state import demo_state  # noqa: E402
 
 
@@ -80,15 +84,59 @@ def main(argv: list[str] | None = None) -> int:
         ):
             database.append(values)
 
+        indexing.save_index(database, indexing.IndexDefinition(
+            "AVMOVSUB", "SUBJECT", "Alphabetically by Movie Subject",
+            levels=[("SUBJECT", "A")]))
+        database.set_primary_index("AVMOVSUB")
+        index_session = IndexSession(database, "AVMSUBTI")
+        index_session.levels = [("SUBJECT", "A"), ("TAPE_TITLE", "A")]
+        index_session.row = 1
+        index_session.column = 0
+        index_session._load_cell()
+        range_session = RangeSession(
+            database,
+            settings=indexing.RangeSettings(primary="AVMOVSUB"))
+        range_session.row = 3
+        range_session.edit_text = "Children's"
+        search_session = SearchSession(database, letter="A")
+        search_session.rows = [
+            SearchRow("SUBJECT", "=", "Children's", "AND"),
+            SearchRow("RATING", "=", "G", "AND"),
+        ]
+        search_session.sort_rows = [("TAPE_TITLE", "A")]
+        search_session.description = "Children's movies rated G"
+        search_session.stage = "search"
+        search_session._load_cell()
+        view_shot = RecordSession(database, "view").view()
+        browse_shot = RecordSession(database, "browse").view()
+        indexing.run_search(
+            database,
+            search_rows=[SearchRow("SUBJECT", "=", "Children's")],
+            sort_rows=[("TAPE_TITLE", "A")], description="Children")
+        indexing.run_search(
+            database,
+            search_rows=[SearchRow("RATING", "=", "G")],
+            description="Rated G")
+        history = indexing.search_history(database)
+        state.database = database
+        history_view = screens.search_history_overlay(
+            screens.main_menu(state, selected=0), history, 0,
+            database=database)
+        state.database = None
+
         shots = {
             "01-main-menu": menu,
             "02-directory": directory,
             "03-help": help_view,
             "04-structure": structure,
             "05-status": status,
-            "07-view-records": RecordSession(database, "view").view(),
-            "08-browse-records": RecordSession(database, "browse").view(),
+            "07-view-records": view_shot,
+            "08-browse-records": browse_shot,
             "09-designer": DesignerSession(workspace, database.name, database).view(),
+            "10-index-table": index_session.view(),
+            "11-range-settings": range_session.view(),
+            "12-search-table": search_session.view(),
+            "13-search-history": history_view,
         }
         for name, view in shots.items():
             image = renderer.to_image(view.buffer)

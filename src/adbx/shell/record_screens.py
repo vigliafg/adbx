@@ -112,14 +112,23 @@ def _position_text(session: RecordSession) -> str:
     seq = session.current_seq
     if seq is not None and session.database.is_deleted(seq):
         text += "   DELETED"
+    text += f"   [{session.order_indicator}]"
+    if session.is_search_list:
+        text += " Search/Sort"
+        if session.search_out_of_date:
+            text += " \u2666"
     return text
 
 
 def _form_hint(session: RecordSession) -> str:
+    if session.locate is not None:
+        return "F3 next locate   ESC exit locate   ALT-M memo   ALT-D delete"
     if session.mode == "view":
-        return "UP/DOWN records   LEFT/RIGHT field   F7 show deleted   ALT-M memo   ALT-D delete"
+        return ("F Find   L Locate   I Index   R Range   F7 show deleted   "
+                "ALT-M memo   ALT-D delete")
     if session.mode == "browse":
-        return "UP/DOWN records   LEFT/RIGHT columns   F7 show deleted   F10 continue"
+        return ("F Find   L Locate   I Index   R Range   F7 show deleted   "
+                "F10 continue")
     return "TAB next field   F10 save   ESC cancel   ALT-M memo   ALT-F5 copy   ALT-F6 paste"
 
 
@@ -130,7 +139,7 @@ def browse_screen(session: RecordSession, theme: Theme = NEWPORT) -> View:
     title_bar(buffer, f"{session.title} - {session.database.name}", theme)
     draw_status_line(buffer, theme, _position_text(session))
     fields = session.database.fields
-    rows = session.database.browse(include_deleted=session.show_deleted)
+    rows = session.browse_rows()
     visible = STATUS_ROW - BROWSE_TOP
     regions: list[Region] = []
 

@@ -1,7 +1,7 @@
 adbx 132x43
  Current database : /ALPHA4V3/TUTOR/AVMOVIES.DBF                                                           Records in database : 50 
 1@15,1,0,0,0 16@3,1,0,0,0 1@15,1,0,0,0 1@3,1,0,0,0 1@15,1,0,0,0 28@15,1,1,0,0 59@15,1,0,0,0 19@3,1,0,0,0 6@15,1,0,0,0
- Primary index    : by Record Number                                                                                                
+ Primary index    : Record Number                                                                                                   
 1@15,1,0,0,0 13@3,1,0,0,0 4@15,1,0,0,0 1@3,1,0,0,0 113@15,1,0,0,0
                                                                                                                                     
 132@15,1,0,0,0

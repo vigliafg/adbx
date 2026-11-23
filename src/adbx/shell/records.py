@@ -11,10 +11,18 @@ richiamano, ALT-M apre il memo, ALT-F5/ALT-F6 copiano e incollano.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from ..cell.buffer import STATUS_ROW
+from ..data import indexing
 from ..data.fields import Field, FieldError, format_value, parse_value
+from ..data.indexing import (
+    RECORD_NUMBER,
+    SHOW_ALL,
+    SHOW_NOT_DELETED,
+    RangeSettings,
+)
 from ..data.workspace import Database, WorkspaceError
 from ..screen.keys import Key, character
 from .theme import NEWPORT, Theme
@@ -28,12 +36,13 @@ MODE_TITLES = {
 }
 
 MODE_KEYS = {
-    "view": [("F1", "Help"), ("F10", "Continue"), ("F7", "Show deleted"),
-             ("Alt-M", "Memo"), ("Alt-D", "Delete"), ("Alt-U", "Undelete"),
-             ("Alt-F5", "Copy")],
-    "browse": [("F1", "Help"), ("F10", "Continue"), ("F7", "Show deleted"),
-               ("Alt-M", "Memo"), ("Alt-D", "Delete"), ("Alt-U", "Undelete"),
-               ("Alt-F5", "Copy")],
+    "view": [("F1", "Help"), ("F", "Find"), ("L", "Locate"), ("I", "Index"),
+             ("R", "Range"), ("S", "Replace"), ("F10", "Continue"),
+             ("F7", "Show deleted"), ("Alt-M", "Memo"), ("Alt-D", "Delete"),
+             ("Alt-U", "Undelete")],
+    "browse": [("F1", "Help"), ("F", "Find"), ("L", "Locate"), ("I", "Index"),
+               ("R", "Range"), ("F10", "Continue"), ("F7", "Show deleted"),
+               ("Alt-M", "Memo"), ("Alt-D", "Delete"), ("Alt-U", "Undelete")],
     "enter": [("F1", "Help"), ("F10", "Save"), ("ESC", "Cancel"),
               ("Alt-M", "Memo"), ("Alt-F5", "Copy"), ("Alt-F6", "Paste")],
     "change": [("F1", "Help"), ("F10", "Save"), ("ESC", "Cancel"),
@@ -161,6 +170,17 @@ class MemoEditor:
 
 
 @dataclass
+class LocateState:
+    """Ricerca di un testo in un insieme di campi (Locate a record)."""
+
+    text: str
+    fields: list[str] = field(default_factory=list)
+    start: int = 0
+    found: int | None = None
+    memo_hit: bool = False
+
+
+@dataclass
 class RecordSession:
     database: Database
     mode: str
@@ -168,6 +188,7 @@ class RecordSession:
     clipboard: list[str] = field(default_factory=lambda: [""])
     show_deleted: bool = False
     status: str = ""
+    request: str = ""
     help_topic: str = "records"
     close: bool = False
     index: int = 0
@@ -181,11 +202,25 @@ class RecordSession:
     dirty: bool = False
     memo: MemoEditor | None = None
     browse_field: int = 0
+    range_settings: RangeSettings | None = None
+    find_history: list[str] = field(default_factory=list)
+    locate: LocateState | None = None
     _seqs: list[int] = field(init=False, default_factory=list)
+    _browse_rows: list[tuple[int, bool, dict[str, str]]] | None = field(
+        init=False, default=None)
+    _value_cache: dict[int, dict[str, str]] | None = field(
+        init=False, default=None)
 
     def __post_init__(self) -> None:
         if self.mode not in MODE_TITLES:
             raise ValueError(f"Unknown record mode: {self.mode}")
+        if self.range_settings is None:
+            self.range_settings = self.database.current_range.copy()
+        elif isinstance(self.range_settings, RangeSettings):
+            self.range_settings = self.range_settings.copy()
+        if self.show_deleted:
+            self.range_settings.show = SHOW_ALL
+        self.show_deleted = self.range_settings.show != SHOW_NOT_DELETED
         self._reload()
         if self.mode == "enter":
             self._start_new()
@@ -215,12 +250,56 @@ class RecordSession:
     def page_rows(self) -> int:
         return max(1, STATUS_ROW - (FORM_WORK_TOP + 1))
 
+    @property
+    def is_search_list(self) -> bool:
+        return self.database.primary_index.startswith(indexing.SEARCH_PREFIX)
+
+    @property
+    def search_out_of_date(self) -> bool:
+        if not self.is_search_list:
+            return False
+        search = indexing.get_search_list(
+            self.database, self.range_settings.search_id)
+        return search is not None and search.out_of_date(self.database)
+
+    @property
+    def order_indicator(self) -> str:
+        return "D" if self.range_settings.order == indexing.ORDER_DESCENDING else "A"
+
+    def apply_range(self, settings: RangeSettings | None = None) -> None:
+        keep = self.current_seq
+        self.range_settings = ((settings or self.database.current_range).copy()
+                               if settings is not None
+                               else self.database.current_range.copy())
+        self.show_deleted = self.range_settings.show != SHOW_NOT_DELETED
+        self._reload(keep=keep)
+        if self.mode == "change":
+            self._load_record()
+        self.status = "Range applied."
+
     def _reload(self, keep: int | None = None) -> None:
-        self._seqs = self.database.sequences(include_deleted=self.show_deleted)
+        try:
+            self._seqs = indexing.ordered_sequences(
+                self.database, self.range_settings)
+        except indexing.IndexError_ as exc:
+            self.status = str(exc)
+            self._seqs = []
         if keep is not None and keep in self._seqs:
             self.index = self._seqs.index(keep)
         self.index = max(0, min(self.index, max(0, len(self._seqs) - 1)))
+        self._browse_rows = None
+        self._value_cache = None
         self._fix_top()
+
+    def values_for(self, seq: int) -> dict[str, str]:
+        """Valori di un record, con una cache per la sessione."""
+        if self._value_cache is None:
+            self._value_cache = {
+                item_seq: values
+                for item_seq, _deleted, values in self.database.iter_values(
+                    include_deleted=True)
+            }
+        return self._value_cache.get(seq, self.database.read(seq))
 
     def _fix_top(self) -> None:
         visible = self.page_rows
@@ -319,6 +398,41 @@ class RecordSession:
         self.dirty = True
 
     # -- salvataggio -----------------------------------------------------
+    def _duplicate_indexes(self, values: dict[str, str]
+                           ) -> list[tuple[indexing.IndexDefinition, bool]]:
+        """Indici attached il cui key value è già usato da un altro record."""
+        duplicates: list[tuple[indexing.IndexDefinition, bool]] = []
+        for definition in indexing.indexes(self.database, attached=True):
+            if definition.allow == indexing.ALLOW_ALL:
+                continue
+            try:
+                key = indexing.index_key(self.database, definition, values)
+            except indexing.IndexError_:
+                continue
+            marker = key if definition.case_sensitive else key.upper()
+            for seq, deleted, other in self.database.iter_values(
+                    include_deleted=False):
+                if seq == self.seq:
+                    continue
+                if not indexing.index_filter_passes(
+                        self.database, definition, other, seq=seq,
+                        deleted=deleted):
+                    continue
+                try:
+                    other_key = indexing.index_key(
+                        self.database, definition, other, seq=seq,
+                        deleted=deleted)
+                except indexing.IndexError_:
+                    continue
+                other_marker = (other_key if definition.case_sensitive
+                                else other_key.upper())
+                if other_marker == marker:
+                    duplicates.append(
+                        (definition,
+                         definition.allow == indexing.ALLOW_EXCEPTIONS))
+                    break
+        return duplicates
+
     def save(self) -> bool:
         if self.mode not in ("enter", "change"):
             return True
@@ -328,13 +442,26 @@ class RecordSession:
                    for field in self.database.fields):
             self.status = "Enter at least one value before saving."
             return False
+        duplicates = self._duplicate_indexes(self.draft)
+        blocked = [definition.name for definition, exception in duplicates
+                   if not exception]
+        if blocked:
+            self.status = ("Duplicate key value for index "
+                           + ", ".join(blocked) + ".")
+            return False
+        warning = (""
+                   if not duplicates else
+                   " Duplicate key allowed for index "
+                   + ", ".join(definition.name
+                               for definition, _exception in duplicates)
+                   + ".")
         try:
             if self.seq is None:
                 self.seq = self.database.append(self.draft)
-                self.status = f"Record {self.seq} added."
+                self.status = f"Record {self.seq} added." + warning
             else:
                 self.database.update(self.seq, self.draft)
-                self.status = f"Record {self.seq} saved."
+                self.status = f"Record {self.seq} saved." + warning
         except WorkspaceError as exc:
             self.status = str(exc)
             return False
@@ -386,7 +513,12 @@ class RecordSession:
             self.status = "Save or cancel the record first."
             return
         keep = self.current_seq
-        self.show_deleted = not self.show_deleted
+        if self.show_deleted:
+            self.range_settings.show = SHOW_NOT_DELETED
+        else:
+            self.range_settings.show = SHOW_ALL
+        self.show_deleted = self.range_settings.show != SHOW_NOT_DELETED
+        self.database.save_current_range(self.range_settings)
         self._reload(keep=keep)
         self.status = ("Deleted records are shown."
                        if self.show_deleted else "Deleted records are hidden.")
@@ -504,6 +636,218 @@ class RecordSession:
         self.dirty = True
         self.status = "Field pasted."
 
+    # -- find, locate, sostituzione, duplicati ---------------------------
+    def browse_rows(self) -> list[tuple[int, bool, dict[str, str]]]:
+        if self._browse_rows is None:
+            wanted = set(self._seqs)
+            order = {seq: position for position, seq in enumerate(self._seqs)}
+            rows = [item for item in self.database.browse(include_deleted=True)
+                    if item[0] in wanted]
+            rows.sort(key=lambda item: order.get(item[0], len(order)))
+            self._browse_rows = rows
+        return self._browse_rows
+
+    def find_label(self) -> str:
+        primary = self.database.primary_index
+        if primary.startswith(indexing.SEARCH_PREFIX):
+            search = indexing.get_search_list(
+                self.database, self._search_id(primary))
+            if search is not None and (search.sort_expression or search.sort_rows):
+                if search.sort_expression:
+                    return search.sort_expression
+                return "+".join(name for name, _direction in search.sort_rows)
+            return "RECORD NUMBER"
+        if primary in (RECORD_NUMBER, indexing.SEARCH_LIST):
+            return "RECORD NUMBER"
+        definition = indexing.find_index(self.database, primary)
+        return definition.label if definition is not None else primary
+
+    def _search_id(self, primary: str) -> int | None:
+        try:
+            return int(primary[len(indexing.SEARCH_PREFIX):])
+        except ValueError:
+            return None
+
+    def _find_key(self, seq: int) -> str:
+        """Chiave del record secondo l'indice primario, per Find."""
+        primary = self.database.primary_index
+        values = self.values_for(seq)
+        if primary.startswith(indexing.SEARCH_PREFIX):
+            search = indexing.get_search_list(
+                self.database, self._search_id(primary))
+            if search is not None and search.sort_expression:
+                from ..data.expressions import Context, evaluate, key_text
+                context = Context(
+                    fields=self.database.fields, values=values,
+                    pattern=self.database.workspace.pattern_mode, padded=True,
+                    seq=seq, count=self.database.count(include_deleted=True))
+                return key_text(evaluate(search.sort_expression, context))
+            if search is not None and search.sort_rows:
+                field = self.database.field(search.sort_rows[0][0])
+                from ..data.expressions import Context, field_value, value_to_text
+                context = Context(
+                    fields=self.database.fields, values=values,
+                    pattern=self.database.workspace.pattern_mode, seq=seq,
+                    count=self.database.count(include_deleted=True))
+                return value_to_text(field_value(context, field.name))
+            return str(seq)
+        if primary in (RECORD_NUMBER, indexing.SEARCH_LIST):
+            return str(seq)
+        definition = indexing.find_index(self.database, primary)
+        if definition is None:
+            return str(seq)
+        return indexing.index_key(self.database, definition, values, seq=seq)
+
+    def find(self, text: str) -> bool:
+        """Find: primo record la cui chiave è uguale o successiva al testo."""
+        if self.mode not in ("view", "browse", "change"):
+            self.status = "Find is available in View, Browse and Change."
+            return False
+        needle = (text or "").strip()
+        if not needle:
+            return False
+        if needle not in self.find_history:
+            self.find_history.insert(0, needle)
+            del self.find_history[20:]
+        if self.database.primary_index in (RECORD_NUMBER, indexing.SEARCH_LIST) \
+                or self.find_label() == "RECORD NUMBER":
+            try:
+                target = int(needle)
+            except ValueError:
+                self.status = "Enter a record number to find."
+                return False
+            for position, seq in enumerate(self._seqs):
+                if seq >= target:
+                    self._set_position(position)
+                    self.status = f"Record {seq}."
+                    return True
+            if self._seqs:
+                self._set_position(len(self._seqs) - 1)
+            self.status = "No record at or after that number."
+            return False
+        needle_key = needle.upper()
+        closest = 0
+        for position, seq in enumerate(self._seqs):
+            key = self._find_key(seq)
+            if key.upper() >= needle_key:
+                self._set_position(position)
+                self.status = f"Find: {key.rstrip() or needle}"
+                return True
+            closest = position
+        if self._seqs:
+            self._set_position(closest)
+        self.status = "No exact match; showing the closest record."
+        return False
+
+    def _set_position(self, position: int) -> None:
+        self.index = max(0, min(len(self._seqs) - 1, position))
+        self._fix_top()
+        if self.mode == "change":
+            self._load_record()
+
+    def start_locate(self, text: str, fields: list[str]) -> bool:
+        needle = (text or "").strip()
+        if not needle:
+            self.status = "Enter a string to locate."
+            return False
+        if not fields:
+            self.status = "Select at least one field."
+            return False
+        self.locate = LocateState(needle, fields, start=0)
+        return self.next_locate()
+
+    def next_locate(self) -> bool:
+        state = self.locate
+        if state is None:
+            return False
+        needle = state.text.upper()
+        for position in range(state.start, len(self._seqs)):
+            seq = self._seqs[position]
+            values = self.values_for(seq)
+            for name in state.fields:
+                field = self.database.fields[
+                    [item.name for item in self.database.fields].index(name)]
+                value = values.get(name, "")
+                if needle in value.upper():
+                    state.start = position + 1
+                    state.found = position
+                    state.memo_hit = field.is_memo
+                    self._set_position(position)
+                    self.status = (f"Locate: {name}"
+                                   + (" (Memo)" if field.is_memo else "")
+                                   + " - F3 next, ESC exit")
+                    return True
+        state.start = len(self._seqs)
+        self.status = "No more records match the locate string."
+        return False
+
+    def cancel_locate(self) -> None:
+        self.locate = None
+        self.status = "Locate ended."
+
+    def replace_all(self, find: str, replacement: str,
+                    fields: list[str]) -> int:
+        """Sostituisce ogni occorrenza nei campi scelti (memo esclusi)."""
+        if self.mode != "view":
+            self.status = "Search and replace is available in View mode."
+            return 0
+        if not find:
+            self.status = "Enter a string to replace."
+            return 0
+        total = 0
+        for seq in list(self._seqs):
+            values = self.database.read(seq)
+            changed = False
+            for name in fields:
+                field = self.database.field(name)
+                if field.is_memo or not values.get(name):
+                    continue
+                new_value, count = re.subn(
+                    re.escape(find), replacement, values[name], flags=re.IGNORECASE)
+                if not count:
+                    continue
+                values[name] = new_value[:field.length]
+                total += count
+                changed = True
+            if changed:
+                self.database.update(seq, values)
+        if total:
+            self._persist()
+            self._reload()
+        self.status = f"Replaced {total} occurrence(s)."
+        return total
+
+    def delete_duplicates(self) -> int:
+        """Marca cancellati i duplicati della chiave dell'indice primario."""
+        primary = self.database.primary_index
+        definition = None
+        if primary.startswith(indexing.SEARCH_PREFIX):
+            self.status = "Select an index before deleting duplicates."
+            return 0
+        if primary in (RECORD_NUMBER, indexing.SEARCH_LIST):
+            self.status = "Select an index before deleting duplicates."
+            return 0
+        definition = indexing.find_index(self.database, primary)
+        if definition is None:
+            self.status = f"Index {primary} not found."
+            return 0
+        seen: set[str] = set()
+        removed = 0
+        for seq in list(self._seqs):
+            values = self.values_for(seq)
+            key = indexing.index_key(self.database, definition, values, seq=seq)
+            marker = key if definition.case_sensitive else key.upper()
+            if marker in seen:
+                self.database.delete(seq)
+                removed += 1
+            else:
+                seen.add(marker)
+        if removed:
+            self._persist()
+            self._reload()
+        self.status = f"{removed} duplicate record(s) marked deleted."
+        return removed
+
     # -- tasti -----------------------------------------------------------
     def handle(self, key: Key) -> None:
         self.status = ""
@@ -514,6 +858,13 @@ class RecordSession:
                 self._close_memo(action)
             return
         name = key.name
+        if self.locate is not None:
+            if name == "F3":
+                self.next_locate()
+                return
+            if name == "ESC":
+                self.cancel_locate()
+                return
         if name == "F1":
             if key.alt:
                 return
@@ -544,6 +895,22 @@ class RecordSession:
         if name == "F7":
             self._toggle_deleted()
             return
+        if self.mode in ("view", "browse") and not key.ctrl:
+            if name == "F":
+                self.request = "find"
+                return
+            if name == "L":
+                self.request = "locate"
+                return
+            if name == "I":
+                self.request = "index"
+                return
+            if name == "R":
+                self.request = "range"
+                return
+            if name == "S" and self.mode == "view":
+                self.request = "replace"
+                return
         if self.mode == "browse":
             self._handle_browse(key)
         elif self.mode == "view":
@@ -678,4 +1045,5 @@ def _typed_char(key: Key) -> str:
     return text
 
 
-__all__ = ["MODE_KEYS", "MODE_TITLES", "MemoEditor", "RecordSession"]
+__all__ = ["LocateState", "MODE_KEYS", "MODE_TITLES", "MemoEditor",
+           "RecordSession"]

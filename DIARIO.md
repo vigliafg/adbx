@@ -324,3 +324,59 @@ Formato:
   - Il nome database è limitato a 8 caratteri DOS; il percorso può essere
     lungo.
 - Prossimo passo: O3 — ricerca, indici, range, search/sort list.
+
+---
+
+### 2026-11-23 — Ondata O3 — Ricerca: indici, range, search/sort list
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: trovare e ordinare i record come Alpha Four, con indici
+  dinamici, range, liste di ricerca, Find/Locate, sostituzione e
+  cancellazione dei duplicati.
+- File toccati: nuovi `src/adbx/data/{expressions,indexing}.py`,
+  `src/adbx/shell/{indexes,searching,dialogs}.py`,
+  `docs/spec/05-ricerca-indici.md`, screenshot
+  `docs/render/10-index-table.png`, `11-range-settings.png`,
+  `12-search-table.png`, `13-search-history.png`; aggiornati
+  `src/adbx/data/workspace.py`, `src/adbx/shell/{controller,records,
+  record_screens,screens,state,help}.py`, `src/adbx/screen/keys.py`,
+  `tools/capture_ui.py`, test nuovi (`test_expressions`, `test_indexing`,
+  `test_index_ui`, `test_find_locate_ui`, `test_range_ui`,
+  `test_search_ui`) e aggiornati (golden, shell menu, directory, support).
+- Scelte:
+  - **Linguaggio di espressioni proprietario** (`data/expressions.py`) con
+    tipi Python (`Decimal`, `date`, `bool`) e Pattern matching nei tre modi
+    del manuale; Table mode sempre case-insensitive ed esatta.
+  - **Indici in SQLite**, non file `.NDX`/`.IDN`: definizione con
+    espressione/livelli, filtro sempre attivo, Allow All/Unique/Unique with
+    exceptions, case sensitive, attached (max 15). La chiave conserva gli
+    spazi dei campi, quindi Find si comporta come l'originale.
+  - **Range persistito** (`range_json`): primary index, order, show,
+    first/last key, unique keys, filtro attivo/inattivo, 26 range salvati.
+    Cambiare primary index resetta First/Last/Unique, come da manuale.
+    Show predefinito = Not deleted (deviazione da All, per conservare O2).
+  - **Search/sort list**: Table/Expression mode, sort table/espressione,
+    una-time o salvata A–Z, storia di 10, combinazione con la lista attiva.
+    Out-of-date confrontando la revisione del database e la versione dei
+    criteri; `Refresh` li ricostruisce. Non esistono file `.SLx`.
+  - **Find** con chiave uguale o successiva (closest match), **Locate** con
+    Field Selection (memo inclusi), **Search and replace** tutto-o-niente,
+    **Delete duplicate** sull'indice primario con cancellazione logica.
+  - Tasti: `F` Find, `L` Locate, `I` Index, `R` Range, `S` Replace in View;
+    Range `F2/F3/F7/F10/ALT-E`; Search `F2/F3/F4/F7/F8/F9/F10`.
+- Test: **197 passed**; `uvx ruff check src tests tools` pulito;
+  `./start.sh --smoke` e `--version` verdi. Accettazione lezioni 7, 8, 9 e
+  15 in quattro file UI; pattern matching nei tre modi, AND/OR e tabella in
+  `test_expressions`; indici/range/liste in `test_indexing`. Verificato sui
+  file reali del Tutorial: `AVMOVIES.DBF` (50 record), indice su titolo,
+  indice a due livelli e ricerca per rating.
+- Problemi aperti / deviazioni dichiarate:
+  - Non ci sono file `.NDX`/`.IDN`/`.SLx`: indici e liste restano nel
+    workspace SQLite. Il `.DBF` è interoperabile, gli indici no.
+  - Find non ha `F2 (use alternate index)` né la storia delle stringhe con
+    `UP`; Locate non offre `Change`/`Options` durante la ricerca.
+  - Search and replace non verifica ogni singola sostituzione.
+  - La storia delle liste non permette di modificare i criteri (solo
+    selezionare, aggiornare, cancellare).
+  - Il range predefinito mostra i non cancellati invece di All.
+- Prossimo passo: O4 — Field rules (lookup, cascading, conditional, post).

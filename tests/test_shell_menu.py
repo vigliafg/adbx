@@ -19,7 +19,7 @@ def test_all_commands_and_status_box():
     assert " 50" in text
     assert "Current database" in text
     assert "AVMOVIES" in text
-    assert "by Record Number" in text
+    assert "Record Number" in text
 
 
 def test_help_line_follows_selection():
@@ -45,7 +45,7 @@ def test_controller_navigation_and_notice():
     assert controller.menu_index == 2
     controller.handle(Key("ENTER"))
     assert controller.overlay is not None and controller.overlay.kind == "message"
-    assert "wave O3" in controller.overlay.text
+    assert "Select a database" in controller.overlay.text
     controller.handle(Key("ESC"))
     assert controller.overlay is None
 

@@ -105,7 +105,7 @@ def _status_box(buffer: CellBuffer, state: ShellState, theme: Theme) -> None:
                  fg=theme.text, bg=theme.bg, bold=True)
     buffer.write(1, 1, "Primary index", fg=theme.label, bg=theme.bg)
     buffer.write(1, 18, ":", fg=theme.label, bg=theme.bg)
-    buffer.write(1, 20, state.current.index_label if state.current else "",
+    buffer.write(1, 20, state.primary_index_label,
                  fg=theme.text, bg=theme.bg)
 
     records = state.records_text
@@ -114,6 +114,13 @@ def _status_box(buffer: CellBuffer, state: ShellState, theme: Theme) -> None:
         start = SCREEN_WIDTH - len(label) - len(value) - 1
         buffer.write(0, start, label, fg=theme.label, bg=theme.bg)
         buffer.write(0, start + len(label), value, fg=theme.text, bg=theme.bg)
+    in_list = state.records_in_list_text
+    if in_list:
+        label = "Records in list"
+        value = f" : {in_list}"
+        start = SCREEN_WIDTH - len(label) - len(value) - 1
+        buffer.write(1, start, label, fg=theme.label, bg=theme.bg)
+        buffer.write(1, start + len(label), value, fg=theme.text, bg=theme.bg)
 
 
 def main_menu(state: ShellState, selected: int = 0,
@@ -464,16 +471,114 @@ def history_overlay(base: View, paths: list[Path], selected: int,
     return overlay_view(base, panel, row, col, regions, theme)
 
 
+def choose_overlay(base: View, title: str, items: list[tuple[str, str]],
+                   selected: int, theme: Theme = NEWPORT,
+                   markers: list[str] | None = None,
+                   footer: str = "ENTER Select   ESC Cancel") -> View:
+    """Elenco generico: indici, range salvati, search/sort, campi."""
+    width = max(36, min(78, max(len(label) for label, _value in items) + 10))
+    height = min(STATUS_ROW - 3, max(6, len(items) + 5))
+    panel = window(width, height, title, theme)
+    regions: list[Region] = []
+    visible = height - 4
+    top = max(0, min(selected - visible + 1, max(0, len(items) - visible)))
+    for offset in range(visible):
+        index = top + offset
+        if index >= len(items):
+            break
+        label, _value = items[index]
+        marker = (markers[index] if markers and index < len(markers) else "")
+        text = f"{marker}{label}"
+        row = 2 + offset
+        if index == selected:
+            panel.fill_rect(row, 1, 1, width - 2, " ",
+                            fg=theme.selected_fg, bg=theme.selected_bg)
+            panel.write(row, 3, clip_text(text, width - 5),
+                        fg=theme.selected_fg, bg=theme.selected_bg)
+        else:
+            panel.write(row, 3, clip_text(text, width - 5),
+                        fg=theme.window_fg, bg=theme.window_bg)
+        regions.append(Region(row, 1, 1, width - 2, f"choose:{index}"))
+    panel.write(height - 2, 3, footer, fg=theme.muted, bg=theme.window_bg)
+    row = max(2, (STATUS_ROW - height) // 2)
+    col = (SCREEN_WIDTH - width) // 2
+    return overlay_view(base, panel, row, col, regions, theme)
+
+
+def fields_overlay(base: View, fields: list[str], chosen: list[str],
+                   cursor: int, title: str, theme: Theme = NEWPORT) -> View:
+    """Field Selection del Locate/Search and replace."""
+    width = 42
+    height = min(STATUS_ROW - 3, len(fields) + 5)
+    panel = window(width, height, title, theme)
+    regions: list[Region] = []
+    visible = height - 4
+    top = max(0, min(cursor - visible + 1, max(0, len(fields) - visible)))
+    selected_names = {name.upper() for name in chosen}
+    for offset in range(visible):
+        index = top + offset
+        if index >= len(fields):
+            break
+        name = fields[index]
+        marker = "\u25b8 " if name.upper() in selected_names else "  "
+        row = 2 + offset
+        if index == cursor:
+            panel.fill_rect(row, 1, 1, width - 2, " ",
+                            fg=theme.selected_fg, bg=theme.selected_bg)
+            panel.write(row, 2, marker + name, fg=theme.selected_fg,
+                        bg=theme.selected_bg)
+        else:
+            panel.write(row, 2, marker + name, fg=theme.window_fg,
+                        bg=theme.window_bg)
+        regions.append(Region(row, 1, 1, width - 2, f"fields:{index}"))
+    panel.write(height - 2, 2, "ENTER toggle  F3 all  F4 incl. memo  F10 ok",
+                fg=theme.muted, bg=theme.window_bg)
+    row = max(2, (STATUS_ROW - height) // 2)
+    col = (SCREEN_WIDTH - width) // 2
+    return overlay_view(base, panel, row, col, regions, theme)
+
+
+def search_history_overlay(base: View, history: list, selected: int,
+                           theme: Theme = NEWPORT, database=None) -> View:
+    width = 82
+    height = max(8, min(len(history), 10) + 5)
+    panel = window(width, height, "Search/Sort List History", theme)
+    regions: list[Region] = []
+    for index, item in enumerate(history[:10]):
+        row = 2 + index
+        stale = ("\u2666 " if database is not None
+                 and item.out_of_date(database) else "")
+        saved = f"{item.letter} - " if item.letter else ""
+        record_count = f"  [{len(item.seqs)}]"
+        text = clip_text(f"{stale}{saved}{item.label}{record_count}", width - 6)
+        if index == selected:
+            panel.fill_rect(row, 1, 1, width - 2, " ",
+                            fg=theme.selected_fg, bg=theme.selected_bg)
+            panel.write(row, 3, text, fg=theme.selected_fg, bg=theme.selected_bg)
+        else:
+            panel.write(row, 3, text, fg=theme.window_fg, bg=theme.window_bg)
+        regions.append(Region(row, 1, 1, width - 2, f"searchhistory:{index}"))
+    panel.write(height - 2, 3,
+                "ENTER select   F5 refresh   F4 delete   ESC cancel",
+                fg=theme.muted, bg=theme.window_bg)
+    row = max(2, (STATUS_ROW - height) // 2)
+    col = (SCREEN_WIDTH - width) // 2
+    return overlay_view(base, panel, row, col, regions, theme)
+
+
 __all__ = [
     "COMMANDS",
     "COMMAND_HELP",
     "DIRECTORY_TITLE",
     "hot_index",
+    "choose_overlay",
     "directory",
+    "fields_overlay",
     "help_overlay",
     "history_overlay",
     "main_menu",
     "message_overlay",
+    "search_history_overlay",
     "status_screen",
     "structure",
     "submenu_overlay",

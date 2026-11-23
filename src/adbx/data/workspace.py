@@ -83,6 +83,27 @@ class Database:
     def record_length(self) -> int:
         return sum(field.length for field in self.fields)
 
+    # -- stato del database (indice primario, range, revisione) ----------
+    def revision(self) -> int:
+        return self.workspace.database_revision(self.name)
+
+    def bump_revision(self) -> None:
+        self.workspace.bump_revision(self.name)
+
+    @property
+    def primary_index(self) -> str:
+        return self.workspace.primary_index(self.name)
+
+    def set_primary_index(self, value: str) -> None:
+        self.workspace.set_primary_index(self.name, value)
+
+    @property
+    def current_range(self):
+        return self.workspace.current_range(self.name)
+
+    def save_current_range(self, settings) -> None:
+        self.workspace.save_current_range(self.name, settings)
+
     # -- lettura ---------------------------------------------------------
     def count(self, *, include_deleted: bool = False) -> int:
         sql = f'SELECT COUNT(*) FROM "{self.table}"'
@@ -172,6 +193,7 @@ class Database:
             if body:
                 self._write_memo(seq, field.name, body)
         self.workspace._connection.commit()
+        self.bump_revision()
         return seq
 
     def update(self, seq: int, values: dict[str, str]) -> None:
@@ -187,6 +209,7 @@ class Database:
         for field in self.memo_fields:
             self._write_memo(seq, field.name, clean.get(field.name, ""))
         self.workspace._connection.commit()
+        self.bump_revision()
 
     def set_deleted(self, seq: int, deleted: bool) -> None:
         self.workspace._connection.execute(
@@ -194,6 +217,7 @@ class Database:
             (1 if deleted else 0, seq),
         )
         self.workspace._connection.commit()
+        self.bump_revision()
 
     def delete(self, seq: int) -> None:
         self.set_deleted(seq, True)
@@ -224,6 +248,7 @@ class Database:
                 if body:
                     self._write_memo(new_seq, field.name, body)
         self.workspace._connection.commit()
+        self.bump_revision()
         return len(rows)
 
     def zap(self) -> None:
@@ -232,6 +257,7 @@ class Database:
         self.workspace._connection.execute(
             "DELETE FROM sqlite_sequence WHERE name = ?", (self.table,))
         self.workspace._connection.commit()
+        self.bump_revision()
 
     # -- interni ---------------------------------------------------------
     def _clean_values(self, values: dict[str, str]) -> dict[str, str]:
@@ -269,6 +295,10 @@ class Workspace:
         self._connection = self._connect()
         self._ensure_schema()
 
+    @property
+    def connection(self) -> sqlite3.Connection:
+        return self._connection
+
     # -- connessione -----------------------------------------------------
     def _connect(self) -> sqlite3.Connection:
         try:
@@ -298,8 +328,143 @@ class Workspace:
                 password_hash TEXT,
                 password_salt TEXT
             );
+            CREATE TABLE IF NOT EXISTS adbx_database_state (
+                database TEXT PRIMARY KEY,
+                primary_index TEXT NOT NULL DEFAULT 'RECORD NUMBER',
+                range_json TEXT NOT NULL DEFAULT '',
+                revision INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS adbx_indexes (
+                database TEXT NOT NULL,
+                name TEXT NOT NULL,
+                definition TEXT NOT NULL,
+                PRIMARY KEY (database, name)
+            );
+            CREATE TABLE IF NOT EXISTS adbx_ranges (
+                database TEXT NOT NULL,
+                letter TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                settings TEXT NOT NULL,
+                PRIMARY KEY (database, letter)
+            );
+            CREATE TABLE IF NOT EXISTS adbx_searches (
+                database TEXT NOT NULL,
+                letter TEXT NOT NULL,
+                definition TEXT NOT NULL,
+                version INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY (database, letter)
+            );
+            CREATE TABLE IF NOT EXISTS adbx_search_lists (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                database TEXT NOT NULL,
+                letter TEXT,
+                description TEXT NOT NULL DEFAULT '',
+                search_expression TEXT NOT NULL DEFAULT '',
+                sort_expression TEXT NOT NULL DEFAULT '',
+                sort_rows TEXT NOT NULL DEFAULT '[]',
+                show TEXT NOT NULL DEFAULT 'not_deleted',
+                case_sensitive INTEGER NOT NULL DEFAULT 0,
+                revision INTEGER NOT NULL DEFAULT 0,
+                created REAL NOT NULL,
+                seqs TEXT NOT NULL DEFAULT '[]',
+                range_json TEXT NOT NULL DEFAULT '{}',
+                def_version INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS adbx_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
             """
         )
+        for row in self._connection.execute("SELECT name FROM adbx_databases"):
+            self._ensure_database_state(row["name"])
+        self._connection.commit()
+
+    def _ensure_database_state(self, name: str) -> None:
+        self._connection.execute(
+            "INSERT OR IGNORE INTO adbx_database_state (database) VALUES (?)",
+            (name,))
+        self._connection.commit()
+
+    # -- impostazioni globali --------------------------------------------
+    def setting(self, key: str, default: str = "") -> str:
+        row = self._connection.execute(
+            "SELECT value FROM adbx_settings WHERE key = ?", (key,)).fetchone()
+        return str(row["value"]) if row is not None else default
+
+    def set_setting(self, key: str, value: str) -> None:
+        self._connection.execute(
+            "INSERT INTO adbx_settings (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value))
+        self._connection.commit()
+
+    @property
+    def pattern_mode(self) -> str:
+        from .expressions import PATTERN_EXACT, PATTERN_MODES
+        value = self.setting("pattern_matching", PATTERN_EXACT)
+        return value if value in PATTERN_MODES else PATTERN_EXACT
+
+    @pattern_mode.setter
+    def pattern_mode(self, value: str) -> None:
+        from .expressions import PATTERN_EXACT, PATTERN_MODES
+        self.set_setting("pattern_matching",
+                         value if value in PATTERN_MODES else PATTERN_EXACT)
+
+    # -- stato del database ----------------------------------------------
+    def database_revision(self, name: str) -> int:
+        row = self._connection.execute(
+            "SELECT revision FROM adbx_database_state WHERE database = ?",
+            (name,)).fetchone()
+        return int(row["revision"]) if row is not None else 0
+
+    def bump_revision(self, name: str) -> None:
+        self._ensure_database_state(name)
+        self._connection.execute(
+            "UPDATE adbx_database_state SET revision = revision + 1 "
+            "WHERE database = ?", (name,))
+        self._connection.commit()
+
+    def primary_index(self, name: str) -> str:
+        row = self._connection.execute(
+            "SELECT primary_index FROM adbx_database_state WHERE database = ?",
+            (name,)).fetchone()
+        return str(row["primary_index"]) if row is not None else "RECORD NUMBER"
+
+    def set_primary_index(self, name: str, value: str) -> None:
+        self._ensure_database_state(name)
+        row = self._connection.execute(
+            "SELECT range_json FROM adbx_database_state WHERE database = ?",
+            (name,)).fetchone()
+        data = {}
+        if row is not None and row["range_json"]:
+            try:
+                data = json.loads(row["range_json"])
+            except ValueError:
+                data = {}
+        data["primary"] = value
+        self._connection.execute(
+            "UPDATE adbx_database_state SET primary_index = ?, range_json = ? "
+            "WHERE database = ?", (value, json.dumps(data), name))
+        self._connection.commit()
+
+    def current_range(self, name: str):
+        from .indexing import RangeSettings
+
+        row = self._connection.execute(
+            "SELECT range_json FROM adbx_database_state WHERE database = ?",
+            (name,)).fetchone()
+        raw = row["range_json"] if row is not None else ""
+        if not raw:
+            return RangeSettings()
+        return RangeSettings.from_dict(json.loads(raw))
+
+    def save_current_range(self, name: str, settings) -> None:
+        self._ensure_database_state(name)
+        self._connection.execute(
+            "UPDATE adbx_database_state SET range_json = ?, primary_index = ? "
+            "WHERE database = ?",
+            (json.dumps(settings.to_dict()), settings.primary, name))
         self._connection.commit()
 
     # -- catalogo --------------------------------------------------------
@@ -368,6 +533,7 @@ class Workspace:
              str(source), now, now, hash_value, salt),
         )
         self._connection.commit()
+        self._ensure_database_state(name)
         write_rows(source, fields, [])
         return self.get(name)  # type: ignore[return-value]
 
@@ -423,6 +589,7 @@ class Workspace:
                         f'INSERT INTO "{memo_table}" (seq, field, body) VALUES (?, ?, ?)',
                         (seq, field.name, clean[field.name]))
         self._connection.commit()
+        self._ensure_database_state(name)
         return self.get(name)  # type: ignore[return-value]
 
     def alter_database(self, name: str,
@@ -502,6 +669,7 @@ class Workspace:
         updated = self.get(database.name)
         assert updated is not None
         self.save_database(updated)
+        updated.bump_revision()
         return updated
 
     def drop_database(self, name: str) -> bool:
@@ -510,6 +678,11 @@ class Workspace:
             return False
         self._drop_tables(database.table, database.memo_table)
         self._connection.execute("DELETE FROM adbx_databases WHERE name = ?", (name,))
+        self._connection.execute("DELETE FROM adbx_database_state WHERE database = ?", (name,))
+        self._connection.execute("DELETE FROM adbx_indexes WHERE database = ?", (name,))
+        self._connection.execute("DELETE FROM adbx_ranges WHERE database = ?", (name,))
+        self._connection.execute("DELETE FROM adbx_searches WHERE database = ?", (name,))
+        self._connection.execute("DELETE FROM adbx_search_lists WHERE database = ?", (name,))
         self._connection.commit()
         if database.origin == "created" and database.source.parent == self.directory:
             try:

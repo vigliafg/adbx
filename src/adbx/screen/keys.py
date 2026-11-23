@@ -122,6 +122,6 @@ def character(key: Key) -> str | None:
     name = normalize_name(key.name)
     if name in ("SPACE",):
         return " "
-    if len(name) == 1 and name.isalnum():
-        return name.upper()
+    if len(name) == 1:
+        return name.upper() if name.isalpha() else name
     return _SYMBOL_CHARS.get(name)

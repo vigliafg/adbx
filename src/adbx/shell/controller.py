@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ROW
+from ..data import indexing
+from ..data.indexing import RECORD_NUMBER, SEARCH_PREFIX
 from ..data.workspace import Database, Workspace, WorkspaceError
 from ..screen.keys import Key, character
 from ..screen.keys import parse as parse_key
@@ -19,7 +21,9 @@ from . import screens
 from .designer import DesignerSession
 from .files import strip_wildcard
 from .help import link_spans, topic, wrap_topic
+from .indexes import IndexSession, RangeSession
 from .records import RecordSession
+from .searching import SearchSession
 from .state import ShellState, default_root, demo_state
 from .theme import NEWPORT, Theme
 from .widgets import View
@@ -70,6 +74,36 @@ UTILITY_ITEMS: tuple[tuple[str, str], ...] = (
     ("Summarize database", "summarize"),
 )
 
+INDEX_ITEMS: tuple[tuple[str, str], ...] = (
+    ("Primary index selection", "primary"),
+    ("Create an index", "create"),
+    ("Update indexes", "update"),
+    ("Attach/detach an index", "attach"),
+    ("Erase an index", "erase"),
+    ("Create/edit a range", "range"),
+    ("Retrieve a range", "retrieve-range"),
+)
+
+SEARCH_ITEMS: tuple[tuple[str, str], ...] = (
+    ("Create/edit a saved search/sort", "create"),
+    ("Run a saved search/sort", "run"),
+    ("One-time search/sort", "one-time"),
+    ("Erase a saved search/sort", "erase"),
+    ("Search/Sort list history", "history"),
+)
+
+OTHER_ITEMS: tuple[tuple[str, str], ...] = (
+    ("Pattern matching", "pattern"),
+)
+
+GLOBAL_ITEMS: tuple[tuple[str, str], ...] = (
+    ("Update a field", "update-field"),
+    ("Change case", "case"),
+    ("Delete range of records", "delete-range"),
+    ("Undelete range of records", "undelete-range"),
+    ("Delete duplicate records", "duplicates"),
+)
+
 
 @dataclass
 class Overlay:
@@ -87,6 +121,8 @@ class Overlay:
     action: str = ""
     action_title: str = "Prompt"
     secret: bool = False
+    markers: list[str] = field(default_factory=list)
+    chosen: list[str] = field(default_factory=list)
 
 
 class ShellController:
@@ -111,6 +147,15 @@ class ShellController:
         self.designer: DesignerSession | None = None
         self.clipboard: list[str] = [""]
         self.pending_path: Path | None = None
+        self.index_session: IndexSession | None = None
+        self.range_session: RangeSession | None = None
+        self.search_session: SearchSession | None = None
+        self.pending_index_name = ""
+        self.pending_locate_text = ""
+        self.pending_replace: list[str] = []
+        self.pending_saved_search = ""
+        self.overlay_chosen: list[str] = []
+        self.return_base = "menu"
 
         if open_path is not None:
             self._open_entry(Path(open_path))
@@ -126,6 +171,12 @@ class ShellController:
             base = self.records.view()
         elif self.base == "designer" and self.designer is not None:
             base = self.designer.view()
+        elif self.base == "index" and self.index_session is not None:
+            base = self.index_session.view()
+        elif self.base == "range" and self.range_session is not None:
+            base = self.range_session.view()
+        elif self.base == "search" and self.search_session is not None:
+            base = self.search_session.view()
         elif self.base == "directory":
             base = screens.directory(
                 self.state, self.cursor, self.input_text, self.input_cursor,
@@ -158,10 +209,28 @@ class ShellController:
                 "records": "View/Enter Records",
                 "design": "Database/set Design",
                 "utilities": "Utilities",
+                "indexes": "Indexes/Ranges",
+                "search": "Search/Sort Lists",
+                "global": "Global Update/Delete",
+                "index-mode": "Create an Index",
+                "other": "Other",
             }.get(overlay.target, "Desktop Options")
             items = overlay.items or list(DESKTOP_ITEMS)
             return screens.submenu_overlay(base, items, overlay.selected,
                                            self.theme, title=title)
+        if overlay.kind == "choose":
+            return screens.choose_overlay(
+                base, overlay.text, list(overlay.items), overlay.selected,
+                self.theme, markers=overlay.markers)
+        if overlay.kind == "fields":
+            return screens.fields_overlay(
+                base, [label for label, _value in overlay.items],
+                overlay.chosen, overlay.selected, overlay.text, self.theme)
+        if overlay.kind == "search-history":
+            history = indexing.search_history(self._active_database(), limit=10)
+            return screens.search_history_overlay(
+                base, history, overlay.selected, self.theme,
+                database=self._active_database())
         if overlay.kind == "history":
             return screens.history_overlay(base, self.state.history,
                                            overlay.selected, self.theme)
@@ -184,6 +253,12 @@ class ShellController:
             self._handle_records(key)
         elif self.base == "designer":
             self._handle_designer(key)
+        elif self.base == "index":
+            self._handle_index_session(key)
+        elif self.base == "range":
+            self._handle_range_session(key)
+        elif self.base == "search":
+            self._handle_search_session(key)
         elif self.base == "directory":
             self._handle_directory(key)
         elif self.base == "structure":
@@ -222,6 +297,18 @@ class ShellController:
             self.overlay.selected = int(value)
             if double:
                 self._activate_overlay_item()
+        elif kind == "choose" and self.overlay is not None:
+            self.overlay.selected = int(value)
+            if double:
+                self._activate_choose()
+        elif kind == "fields" and self.overlay is not None:
+            self.overlay.selected = int(value)
+            if double:
+                self._toggle_field_choice()
+        elif kind == "searchhistory" and self.overlay is not None:
+            self.overlay.selected = int(value)
+            if double:
+                self._activate_search_history()
         elif kind == "history" and self.overlay is not None:
             self.overlay.selected = int(value)
             if double:
@@ -522,6 +609,37 @@ class ShellController:
             self.overlay = Overlay("submenu", items=list(UTILITY_ITEMS),
                                    target="utilities")
             return
+        if topic_id == "indexes":
+            if self.database is None:
+                self._notice("Select a database or set first.")
+                return
+            if self.database.locked:
+                self._prompt_unlock(self.database)
+                return
+            self.overlay = Overlay("submenu", items=list(INDEX_ITEMS),
+                                   target="indexes")
+            return
+        if topic_id == "search":
+            if self.database is None:
+                self._notice("Select a database or set first.")
+                return
+            if self.database.locked:
+                self._prompt_unlock(self.database)
+                return
+            self.overlay = Overlay("submenu", items=list(SEARCH_ITEMS),
+                                   target="search")
+            return
+        if topic_id == "global":
+            if self.database is None:
+                self._notice("Select a database or set first.")
+                return
+            self.overlay = Overlay("submenu", items=list(GLOBAL_ITEMS),
+                                   target="global")
+            return
+        if topic_id == "other":
+            self.overlay = Overlay("submenu", items=list(OTHER_ITEMS),
+                                   target="other")
+            return
         wave = COMMAND_WAVES.get(topic_id, "a later wave")
         self._notice(f"{label} is not available yet (wave {wave}).")
 
@@ -550,7 +668,11 @@ class ShellController:
         if key.name == "F1" and not key.alt:
             self._open_help(session.help_topic)
             return
+        session.request = ""
         session.handle(key)
+        if session.request:
+            self._record_request(session.request)
+            return
         if session.close:
             self._finish_records()
 
@@ -648,6 +770,53 @@ class ShellController:
         if action == "create":
             self._open_designer(None, text)
             return
+        if action == "index-name":
+            self.pending_index_name = text.upper() or "INDEX"
+            self.overlay = Overlay(
+                "submenu", items=[("Table mode", "table"),
+                                  ("Expression mode", "expression")],
+                target="index-mode")
+            return
+        if action == "search-letter":
+            letter = (text.strip().upper() or "A")[:1]
+            if not letter.isalpha():
+                self.overlay = None
+                self._notice("Search/sort ids are letters A-Z.")
+                return
+            existing = (indexing.saved_search(self.database, letter)
+                        if self.database is not None else None)
+            if existing is not None:
+                self._start_search_session(existing=existing)
+            else:
+                self._start_search_session(letter=letter)
+            return
+        if action == "find":
+            self.overlay = None
+            if self.records is not None:
+                self.records.find(text)
+            return
+        if action == "locate":
+            self.overlay = None
+            self.pending_locate_text = text
+            chosen = [field.name for field in self.database.fields
+                      if not field.is_memo] if self.database else []
+            self._open_fields("Field Selection", chosen, "locate-fields")
+            return
+        if action == "replace-find":
+            self.overlay = None
+            self.pending_replace = [text]
+            self.overlay = Overlay(
+                "prompt", text="Replace with", action="replace-with",
+                action_title="Search and Replace")
+            return
+        if action == "replace-with":
+            self.overlay = None
+            self.pending_replace.append(text)
+            chosen = [field.name for field in self.database.fields
+                      if field.type == "C"] if self.database else []
+            self._open_fields("Fields to Search and Replace", chosen,
+                              "replace-fields")
+            return
         if action.startswith("unlock:"):
             name = action.split(":", 1)[1]
             database = (self.workspace.get(name) if self.workspace is not None
@@ -688,6 +857,37 @@ class ShellController:
         assert overlay is not None
         action = overlay.action
         self.overlay = None
+        if action.startswith("delete-index:"):
+            name = action.split(":", 1)[1]
+            if self.database is not None:
+                indexing.delete_index(self.database, name)
+                if self.records is not None:
+                    self.records.apply_range()
+                self._notice(f"Index {name} erased.")
+            return
+        if action.startswith("erase-search:"):
+            letter = action.split(":", 1)[1]
+            if self.database is not None:
+                indexing.delete_saved_search(self.database, letter)
+                self._notice(f"Search/sort {letter} erased.")
+            return
+        if action.startswith("delete-search-list:"):
+            search_id = int(action.split(":", 1)[1])
+            if self.database is not None:
+                indexing.delete_search_list(self.database, search_id)
+                if self.records is not None:
+                    self.records.apply_range()
+                self._notice("Search/Sort List deleted.")
+            return
+        if action == "replace-all":
+            find = self.pending_replace[0] if self.pending_replace else ""
+            replacement = (self.pending_replace[1]
+                           if len(self.pending_replace) > 1 else "")
+            chosen = list(self.overlay_chosen)
+            if self.records is not None:
+                self.records.replace_all(find, replacement, chosen)
+                self._notice(self.records.status)
+            return
         if action.startswith("erase:"):
             name = action.split(":", 1)[1]
             workspace = (self.database.workspace if self.database is not None
@@ -723,6 +923,16 @@ class ShellController:
             self._design_action(action)
         elif overlay.target == "utilities":
             self._utility_action(action)
+        elif overlay.target == "indexes":
+            self._index_action(action)
+        elif overlay.target == "search":
+            self._search_action(action)
+        elif overlay.target == "global":
+            self._global_action(action)
+        elif overlay.target == "other":
+            self._other_action(action)
+        elif overlay.target == "index-mode":
+            self._start_index_session(action)
 
     def _design_action(self, action: str) -> None:
         if action == "create":
@@ -758,6 +968,478 @@ class ShellController:
                          f"{remaining} remain.")
             return
         self._notice(f"Utilities → {action} is not available yet (wave O9).")
+
+    # -- indici, range e search/sort ------------------------------------
+    def _active_database(self) -> Database | None:
+        return self.database
+
+    def _choose_primary(self) -> None:
+        database = self.database
+        if database is None:
+            self._notice("Select a database first.")
+            return
+        items: list[tuple[str, str]] = [("Record Number", RECORD_NUMBER)]
+        markers = ["\u25b8 " if database.primary_index == RECORD_NUMBER else ""]
+        for definition in indexing.indexes(database, attached=True):
+            markers.append(
+                "\u25b8 " if database.primary_index == definition.name else "")
+            items.append((definition.label, definition.name))
+        history = indexing.search_history(database, limit=1)
+        if history:
+            search = history[0]
+            stale = "\u2666 " if search.out_of_date(database) else ""
+            markers.append(
+                "\u25b8 " if database.primary_index ==
+                f"{SEARCH_PREFIX}{search.id}" else stale)
+            items.append((f"Search/Sort: {search.label}",
+                          f"{SEARCH_PREFIX}{search.id}"))
+        self.overlay = Overlay("choose", text="Indexes", items=items,
+                               markers=markers, action="set-primary")
+
+    def _index_action(self, action: str) -> None:
+        database = self.database
+        if database is None:
+            self._notice("Select a database first.")
+            return
+        if action == "primary":
+            self._choose_primary()
+        elif action == "create":
+            self.overlay = Overlay(
+                "prompt", text="Enter index filename",
+                action="index-name", action_title="Create an Index")
+        elif action == "update":
+            self._choose_index(action="update-index", attached_only=True)
+        elif action == "attach":
+            self._choose_index(action="toggle-attach", attached_only=False)
+        elif action == "erase":
+            self._choose_index(action="erase-index", attached_only=False)
+        elif action == "range":
+            self._start_range_session(return_base="menu")
+        elif action == "retrieve-range":
+            self._choose_saved_range()
+
+    def _choose_index(self, *, action: str, attached_only: bool) -> None:
+        database = self.database
+        assert database is not None
+        definitions = indexing.indexes(database, attached=attached_only or None)
+        if not definitions:
+            self._notice("There are no indexes for this database.")
+            return
+        items = []
+        markers = []
+        for definition in definitions:
+            items.append((definition.label, definition.name))
+            markers.append("\u25b8 " if definition.attached else "  ")
+        self.overlay = Overlay("choose", text="Index Files", items=items,
+                               markers=markers, action=action)
+
+    def _start_index_session(self, mode: str) -> None:
+        database = self.database
+        if database is None:
+            return
+        name = self.pending_index_name.strip().upper()
+        if not name:
+            self.overlay = None
+            self._notice("Enter an index filename.")
+            return
+        if len(name) > 8:
+            self.overlay = None
+            self._notice("Index names use at most 8 characters.")
+            return
+        existing = indexing.find_index(database, name)
+        self.index_session = IndexSession(
+            database, name, self.theme, mode=mode, existing=existing)
+        self.overlay = None
+        self.base = "index"
+
+    def _handle_index_session(self, key: Key) -> None:
+        session = self.index_session
+        assert session is not None
+        if key.name == "F1" and not key.alt:
+            self._open_help("indexes")
+            return
+        session.handle(key)
+        if session.close:
+            self._finish_index_session()
+
+    def _finish_index_session(self) -> None:
+        session = self.index_session
+        self.index_session = None
+        self.base = "menu"
+        if session is None:
+            return
+        if session.saved is not None:
+            self._notice(session.status)
+            if self.records is not None:
+                self.records.apply_range()
+        elif session.status:
+            self._notice(session.status)
+
+    def _start_range_session(self, *, return_base: str,
+                             temporary: bool = False,
+                             settings=None) -> None:
+        database = self.database
+        if database is None:
+            self._notice("Select a database first.")
+            return
+        self.return_base = return_base
+        self.range_session = RangeSession(
+            database, self.theme,
+            settings=settings or database.current_range,
+            temporary=temporary)
+        self.base = "range"
+
+    def _handle_range_session(self, key: Key) -> None:
+        session = self.range_session
+        assert session is not None
+        if key.name == "F1" and not key.alt:
+            self._open_help("ranges")
+            return
+        session.handle(key)
+        if session.close:
+            self._finish_range_session()
+
+    def _finish_range_session(self) -> None:
+        session = self.range_session
+        self.range_session = None
+        if session is None:
+            return
+        if session.applied and self.records is not None \
+                and self.return_base == "records":
+            self.records.apply_range()
+        if session.applied and self.search_session is not None \
+                and self.return_base == "search":
+            self.search_session.set_range(session.settings)
+            self.base = "search"
+            return
+        if session.applied and self.pending_saved_search:
+            letter = self.pending_saved_search
+            self.pending_saved_search = ""
+            self.base = "menu"
+            self._run_saved_search(letter, session.settings)
+            return
+        if session.applied and self.return_base == "menu" \
+                and self.records is not None:
+            self.records.apply_range()
+        if session.status:
+            self._notice(session.status)
+        self.base = self.return_base
+        if self.pending_saved_search:
+            self.pending_saved_search = ""
+
+    def _choose_saved_range(self) -> None:
+        database = self.database
+        assert database is not None
+        ranges = indexing.saved_ranges(database)
+        if not ranges:
+            self._notice("There are no saved ranges.")
+            return
+        items = [("Default Range", "DEFAULT")]
+        for letter, description, _settings in ranges:
+            items.append((f"{letter} - {description or 'Range ' + letter}",
+                          letter))
+        self.overlay = Overlay("choose", text="Retrieve a Range",
+                               items=items, action="apply-range")
+
+    def _start_search_session(self, *, letter: str | None = None,
+                              existing=None) -> None:
+        database = self.database
+        if database is None:
+            self._notice("Select a database first.")
+            return
+        self.search_session = SearchSession(
+            database, self.theme, letter=letter, existing=existing)
+        self.base = "search"
+        self.overlay = None
+
+    def _handle_search_session(self, key: Key) -> None:
+        session = self.search_session
+        assert session is not None
+        if key.name == "F1" and not key.alt:
+            self._open_help("search")
+            return
+        session.handle(key)
+        if session.request_range:
+            session.request_range = False
+            self._start_range_session(return_base="search", temporary=True,
+                                      settings=session.range_settings)
+            return
+        if session.close:
+            self._finish_search_session()
+
+    def _finish_search_session(self) -> None:
+        session = self.search_session
+        self.search_session = None
+        self.base = "menu"
+        if session is None:
+            return
+        if session.result is not None:
+            self._notice(f"{len(session.result.seqs)} record(s) in the "
+                         "Search/Sort List.")
+            if self.records is not None:
+                self.records.apply_range()
+
+    def _search_action(self, action: str) -> None:
+        database = self.database
+        if database is None:
+            self._notice("Select a database first.")
+            return
+        if action == "create":
+            self.overlay = Overlay(
+                "prompt", text="Enter search/sort letter A-Z (blank for A)",
+                action="search-letter", action_title="Saved Search/Sort")
+        elif action == "run":
+            searches = indexing.saved_searches(database)
+            if not searches:
+                self._notice("There are no saved search/sort definitions.")
+                return
+            items = [(f"{search.letter} - {search.description or search.letter}",
+                      search.letter) for search in searches]
+            self.overlay = Overlay("choose", text="Saved Search/Sort",
+                                   items=items, action="run-saved")
+        elif action == "one-time":
+            self._start_search_session()
+        elif action == "erase":
+            searches = indexing.saved_searches(database)
+            if not searches:
+                self._notice("There are no saved search/sort definitions.")
+                return
+            items = [(f"{search.letter} - {search.description or search.letter}",
+                      search.letter) for search in searches]
+            self.overlay = Overlay("choose", text="Erase Search/Sort",
+                                   items=items, action="erase-saved")
+        elif action == "history":
+            if not indexing.search_history(database):
+                self._notice("The Search/Sort history is empty.")
+                return
+            self.overlay = Overlay("search-history")
+
+    def _run_saved_search(self, letter: str,
+                          settings=None) -> None:
+        database = self.database
+        if database is None:
+            return
+        try:
+            result = indexing.run_saved_search(
+                database, letter,
+                range_settings=settings or database.current_range)
+        except (indexing.IndexError_, WorkspaceError) as exc:
+            self._notice(f"Cannot run search {letter}: {exc}")
+            return
+        self._notice(f"{len(result.seqs)} record(s) in the "
+                     "Search/Sort List.")
+        if self.records is not None:
+            self.records.apply_range()
+
+    def _other_action(self, action: str) -> None:
+        self.overlay = None
+        if action == "pattern":
+            workspace = (self.database.workspace if self.database is not None
+                         else self.workspace)
+            if workspace is None:
+                self._notice("Open a database first.")
+                return
+            modes = ["exact", "case", "insensitive"]
+            current = workspace.pattern_mode
+            value = modes[(modes.index(current) + 1) % len(modes)]
+            workspace.pattern_mode = value
+            label = {"exact": "Exact", "case": "Case",
+                     "insensitive": "Case-insensitive"}[value]
+            self._notice(f"Pattern matching: {label}.")
+            return
+        self._notice(f"Other → {action} is not available yet (wave O12).")
+
+    def _global_action(self, action: str) -> None:
+        self.overlay = None
+        if action == "duplicates":
+            self._delete_duplicates()
+            return
+        self._notice(f"Global update → {action} is not available yet "
+                     "(wave O9).")
+
+    def _delete_duplicates(self) -> None:
+        database = self.database
+        if database is None:
+            self._notice("Select a database first.")
+            return
+        if database.primary_index in (RECORD_NUMBER, indexing.SEARCH_LIST) \
+                or database.primary_index.startswith(SEARCH_PREFIX):
+            self._notice("Select an index before deleting duplicates.")
+            return
+        session = RecordSession(database, "view", self.theme)
+        removed = session.delete_duplicates()
+        self._notice(session.status)
+        if removed and self.records is not None:
+            self.records.apply_range()
+
+    # -- richieste delle modalità record --------------------------------
+    def _record_request(self, request: str) -> None:
+        session = self.records
+        if session is None:
+            return
+        if request == "find":
+            self.overlay = Overlay(
+                "prompt", text=f"Which '{session.find_label()}'",
+                action="find", action_title="Find")
+        elif request == "locate":
+            self.overlay = Overlay(
+                "prompt", text="Locate", action="locate",
+                action_title="Locate a Record")
+        elif request == "index":
+            self._choose_primary()
+        elif request == "range":
+            self._start_range_session(return_base="records",
+                                      settings=session.range_settings)
+        elif request == "replace":
+            self.overlay = Overlay(
+                "prompt", text="Search for", action="replace-find",
+                action_title="Search and Replace")
+
+    def _open_fields(self, title: str, chosen: list[str],
+                     action: str) -> None:
+        database = self.database
+        if database is None:
+            return
+        items = [(field.name, field.name) for field in database.fields]
+        self.overlay = Overlay("fields", text=title, items=items,
+                               chosen=chosen, action=action)
+
+    def _toggle_field_choice(self) -> None:
+        overlay = self.overlay
+        assert overlay is not None
+        if not overlay.items:
+            return
+        name = overlay.items[overlay.selected][1]
+        upper = name.upper()
+        if upper in {item.upper() for item in overlay.chosen}:
+            overlay.chosen = [item for item in overlay.chosen
+                              if item.upper() != upper]
+        else:
+            overlay.chosen.append(name)
+
+    # -- dispatcher degli elenchi ---------------------------------------
+    def _activate_choose(self) -> None:
+        overlay = self.overlay
+        assert overlay is not None
+        if not overlay.items:
+            return
+        label, value = overlay.items[overlay.selected]
+        action = overlay.action
+        self.overlay = None
+        database = self.database
+        if database is None:
+            return
+        if action == "set-primary":
+            database.set_primary_index(value)
+            if self.records is not None:
+                self.records.apply_range()
+            self._notice(f"Primary index: {indexing.primary_label(database)}.")
+        elif action == "update-index":
+            definition = indexing.find_index(database, value)
+            if definition is not None:
+                self.index_session = IndexSession(
+                    database, definition.name, self.theme,
+                    existing=definition)
+                self.base = "index"
+        elif action == "toggle-attach":
+            definition = indexing.find_index(database, value)
+            if definition is None:
+                return
+            try:
+                indexing.set_index_attached(
+                    database, value, not definition.attached)
+            except indexing.IndexError_ as exc:
+                self._notice(str(exc))
+                return
+            self._notice(
+                f"Index {value} "
+                + ("attached." if not definition.attached else "detached."))
+        elif action == "erase-index":
+            self.overlay = Overlay(
+                "confirm", text=f"Erase index {value}?",
+                action=f"delete-index:{value}")
+        elif action == "apply-range":
+            if value == "DEFAULT":
+                settings = indexing.default_range()
+            else:
+                found = indexing.get_range(database, value)
+                if found is None:
+                    return
+                settings = found[1]
+            database.save_current_range(settings)
+            if self.records is not None:
+                self.records.apply_range(settings)
+            self._notice("Range retrieved.")
+        elif action == "run-saved":
+            saved = indexing.saved_search(database, value)
+            if saved is None:
+                return
+            if saved.sort_rows or saved.sort_expression.strip():
+                self._run_saved_search(value)
+            else:
+                self.pending_saved_search = value
+                self._start_range_session(return_base="menu",
+                                          temporary=True)
+        elif action == "erase-saved":
+            self.overlay = Overlay(
+                "confirm", text=f"Erase search/sort {value}?",
+                action=f"erase-search:{value}")
+
+    def _refresh_selected_history(self) -> None:
+        overlay = self.overlay
+        database = self.database
+        if overlay is None or database is None:
+            return
+        history = indexing.search_history(database, limit=10)
+        if not history:
+            self.overlay = None
+            return
+        search = history[min(overlay.selected, len(history) - 1)]
+        try:
+            rebuilt = indexing.refresh_search_list(database, search.id)
+        except (indexing.IndexError_, WorkspaceError) as exc:
+            self._notice(f"Cannot refresh: {exc}")
+            return
+        overlay.selected = 0
+        if self.records is not None:
+            self.records.apply_range()
+        self._notice(f"Search/Sort refreshed: {len(rebuilt.seqs)} record(s).")
+
+    def _delete_selected_history(self) -> None:
+        overlay = self.overlay
+        database = self.database
+        if overlay is None or database is None:
+            return
+        history = indexing.search_history(database, limit=10)
+        if not history:
+            self.overlay = None
+            return
+        search = history[min(overlay.selected, len(history) - 1)]
+        self.overlay = Overlay(
+            "confirm", text=f"Delete Search/Sort List '{search.label}'?",
+            action=f"delete-search-list:{search.id}")
+
+    def _activate_search_history(self) -> None:
+        overlay = self.overlay
+        assert overlay is not None
+        database = self.database
+        if database is None:
+            self.overlay = None
+            return
+        history = indexing.search_history(database, limit=10)
+        if not history:
+            self.overlay = None
+            return
+        selected = min(overlay.selected, len(history) - 1)
+        search = history[selected]
+        database.set_primary_index(f"{SEARCH_PREFIX}{search.id}")
+        self.overlay = None
+        if self.records is not None:
+            self.records.apply_range()
+            self.base = "records"
+        else:
+            self.base = "menu"
+        self._notice(f"Search/Sort: {search.label}.")
 
     def _open_info(self, screen: str) -> None:
         if self.state.current is None:
@@ -830,6 +1512,74 @@ class ShellController:
         if overlay.kind == "confirm":
             if name == "ENTER":
                 self._confirm_action()
+            elif name == "ESC":
+                self.overlay = None
+            return
+        if overlay.kind == "choose":
+            if name == "UP":
+                overlay.selected = max(0, overlay.selected - 1)
+            elif name == "DOWN":
+                overlay.selected = min(len(overlay.items) - 1,
+                                       overlay.selected + 1)
+            elif name == "PGUP":
+                overlay.selected = max(0, overlay.selected - 10)
+            elif name == "PGDN":
+                overlay.selected = min(len(overlay.items) - 1,
+                                       overlay.selected + 10)
+            elif name == "ENTER":
+                self._activate_choose()
+            elif name == "ESC":
+                self.overlay = None
+            return
+        if overlay.kind == "fields":
+            if name == "UP":
+                overlay.selected = max(0, overlay.selected - 1)
+            elif name == "DOWN":
+                overlay.selected = min(len(overlay.items) - 1,
+                                       overlay.selected + 1)
+            elif name == "PGUP":
+                overlay.selected = max(0, overlay.selected - 10)
+            elif name == "PGDN":
+                overlay.selected = min(len(overlay.items) - 1,
+                                       overlay.selected + 10)
+            elif name in ("ENTER", "SPACE"):
+                self._toggle_field_choice()
+            elif name == "F3":
+                overlay.chosen = [label for label, _value in overlay.items
+                                  if not (self.database is not None
+                                          and self.database.field(label).is_memo)]
+            elif name == "F4":
+                overlay.chosen = [label for label, _value in overlay.items]
+            elif name == "F10":
+                chosen = list(overlay.chosen)
+                action = overlay.action
+                self.overlay = None
+                if action == "locate-fields" and self.records is not None:
+                    self.records.start_locate(self.pending_locate_text, chosen)
+                elif action == "replace-fields":
+                    self.overlay_chosen = chosen
+                    self.overlay = Overlay(
+                        "confirm",
+                        text=f"Replace all occurrences in "
+                             f"{len(chosen)} field(s)?",
+                        action="replace-all")
+            elif name == "ESC":
+                self.overlay = None
+            return
+        if overlay.kind == "search-history":
+            if name == "UP":
+                overlay.selected = max(0, overlay.selected - 1)
+            elif name == "DOWN":
+                history = (indexing.search_history(self._active_database())
+                           if self._active_database() else [])
+                overlay.selected = min(max(0, len(history) - 1),
+                                       overlay.selected + 1)
+            elif name == "ENTER":
+                self._activate_search_history()
+            elif name == "F5":
+                self._refresh_selected_history()
+            elif name == "F4":
+                self._delete_selected_history()
             elif name == "ESC":
                 self.overlay = None
             return
@@ -938,6 +1688,17 @@ class ShellController:
         self._open_entry(path)
 
     def _to_main_menu(self) -> None:
+        if self.base in ("index", "range", "search") and self.overlay is None:
+            if self.base == "index" and self.index_session is not None:
+                self.index_session.close = True
+                self._finish_index_session()
+            elif self.base == "range" and self.range_session is not None:
+                self.range_session.close = True
+                self._finish_range_session()
+            elif self.base == "search" and self.search_session is not None:
+                self.search_session.close = True
+                self._finish_search_session()
+            return
         if self.base == "records" and self.records is not None:
             if self.records.memo is not None:
                 self._notice("Save or cancel the memo first.")

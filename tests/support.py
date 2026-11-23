@@ -73,3 +73,56 @@ def make_tutorial_set(directory: Path) -> Path:
     write_dbf(directory / "AVSALES2.DBF", records=16,
               fields=(("INV_NO", "C", 4, 0), ("QUANTITY", "N", 3, 0)))
     return directory
+
+
+def make_movies(tmp_path):
+    """Database AVMOVIES ridotto, con titoli, soggetti, rating e memo."""
+    from adbx.data.fields import Field
+    from adbx.data.workspace import Workspace
+
+    workspace = Workspace(tmp_path)
+    database = workspace.create_database("AVMOVIES", [
+        Field("TAPE_ID", "C", 4), Field("TAPE_TITLE", "C", 30),
+        Field("TAPE_DESC", "M", 10), Field("SUBJECT", "C", 20),
+        Field("RATING", "C", 5),
+    ])
+    rows = [
+        ("1006", "Dumbo", "A Disney cartoon favorite.", "Children", "NR"),
+        ("1007", "For Your Eyes Only", "James Bond - 007.",
+         "Action/Adventure", "PG"),
+        ("1001", "Big Easy, The", "A suspense set in New Orleans.",
+         "Action/Adventure", "R"),
+        ("1013", "Gone With The Wind", "A civil war epic.", "Drama", "G"),
+        ("1015", "Benji", "A dog saves the day.", "Children", "G"),
+        ("1021", "Bugs Bunny's Wacky Adventures",
+         "Bone-chilling fun with Bugs.", "Children", "G"),
+        ("1022", "Moonstruck", "A romantic comedy.", "Comedy", "PG"),
+    ]
+    for tape_id, title, description, subject, rating in rows:
+        database.append({"TAPE_ID": tape_id, "TAPE_TITLE": title,
+                         "TAPE_DESC": description, "SUBJECT": subject,
+                         "RATING": rating})
+    return tmp_path / "AVMOVIES.DBF", database
+
+
+def make_patrons(tmp_path):
+    """Database AVPATRON ridotto per search/sort e range."""
+    from adbx.data.fields import Field
+    from adbx.data.workspace import Workspace
+
+    workspace = Workspace(tmp_path)
+    database = workspace.create_database("AVPATRON", [
+        Field("NAME", "C", 20), Field("CITY", "C", 15),
+        Field("STATE", "C", 2), Field("ACTIVE", "L", 1),
+    ])
+    rows = [
+        ("Ada", "Placid", "NY", "1"),
+        ("Bob", "Placid", "CA", "0"),
+        ("Cara", "Snowville", "NY", "1"),
+        ("Dan", "Placid", "NY", "1"),
+        ("Eve", "Lake Placid", "NY", "1"),
+    ]
+    for name, city, state, active in rows:
+        database.append({"NAME": name, "CITY": city, "STATE": state,
+                         "ACTIVE": active})
+    return tmp_path / "AVPATRON.DBF", database
