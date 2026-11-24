@@ -246,3 +246,40 @@ L'audit ha trovato 112 scritture fuori griglia in 15 punti:
   fondo, nessun testo tagliato.
 - `grep` finale: nessun riferimento a 132×43 in README, manuale e specifiche,
   salvo i confronti espliciti con la linea principale e i canvas di stampa.
+
+## Step 8 — 2026-11-24 — Criteri di accettazione
+
+Verifica finale del piano (§8), eseguita sul worktree pulito:
+
+1. **Isolamento** — `adbx` è a `fa845f2`, working tree identico al baseline
+   (hash dello status invariato); `adbx-legacy` è un worktree dello stesso
+   repository sul ramo `adbx-legacy`, con `.venv` proprio, `config.json` e
+   workspace separati.
+2. **Griglia** — `./start.sh --smoke` → `adbx 1.0.0: griglia 80x25, digest
+   9f8b632350151a12`; dump `adbx 80x25` di 51 righe. Chrome verificato:
+   status line riga 23 (1-based, vuota nel main menu), help line 24 con
+   `View, change, enter or delete records`, menu line 25 con `F1Help…`.
+3. **Nessun clipping non voluto** — audit a **0 eventi** sulle 62 viste
+   canoniche; la fixture autouse copre l'intera suite.
+4. **Suite** — `521 passed`, nessuno skip; le **25 lezioni** del Tutorial
+   passano senza adattamenti funzionali.
+5. **Strumenti** — `tools/benchmark.py --records 500` (append 0,077 s,
+   indice <0,001 s, ordered scan 0,026 s, search 0,042 s, report 0,122 s,
+   update 0,127 s), `capture_ui.py` (62 viste 880×525) ed `e2e_visual.py`
+   (8 scenari 800×475) funzionanti. `ruff` non è installato nell'ambiente:
+   controllo di stile non eseguibile qui.
+6. **Confronto visivo** — main menu adbx affiancato allo screenshot DOSBox
+   80×25: stessa disposizione dei 12 comandi, stesse tre righe di chrome,
+   stesso testo di help. Le differenze sono solo estetiche (font TrueType,
+   colori del tema, larghezza del box).
+7. **Artefatti** — 62 PNG a 880×525, 8 E2E a 800×475, `manifest.json` e
+   README E2E coerenti; `06-alpha-four-dosbox.png` invariato.
+8. **Documentazione** — nessun riferimento a 132×43 in README, manuale e
+   specifiche, salvo i confronti espliciti con la linea principale e i canvas
+   di stampa; un test lo impone.
+
+### Esito
+
+Tutti i criteri del piano sono soddisfatti. La variante legacy è completa:
+stessa suite della linea principale, stessa parità funzionale, interfaccia
+80×25 con font scalabile e isolamento totale dei dati.

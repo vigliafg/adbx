@@ -21,7 +21,7 @@ git dedicato (`adbx-legacy`) accanto alla versione a 132×43, che resta la
 linea principale: stessi test, stesso motore, layout diverso.
 
 > **Stato:** release **1.0.0** — conformità alle 25 lezioni del Tutorial,
-> 520 test verdi, nessun test saltato.
+> 521 test verdi, nessun test saltato.
 
 ![Alpha Four main menu](docs/render/01-main-menu.png)
 
@@ -80,8 +80,9 @@ principale a 132×43, e cambia solo la geometria della griglia e il reflow
 delle schermate.
 
 - **Worktree separato.** Vive in `../adbx-legacy`, sullo stesso repository git
-  e sul ramo `adbx-legacy`; `adbx` resta intatto. Ogni worktree ha il proprio
-  `.venv`, `config.json`, workspace e `.adbx.sqlite`.
+  e sul ramo `adbx-legacy`; `adbx` resta intatto. Usa il proprio `.venv`
+  (creato da `start.sh`), il proprio `config.json` e un workspace separato:
+  nessun file dell'altra copia viene toccato.
 - **Avvio.** Sempre dalla radice del worktree, perché `start.sh` non cambia
   directory e i percorsi relativi (`config.json`, dati) seguono la cwd:
 
@@ -123,7 +124,7 @@ delle schermate.
 | Script | keystroke, dialog box, menu bar, registrazione, Screen Test, 40+ comandi, variabili, trigger, debugger |
 | Applicazioni | outline, parametri, banner, macro, simulazione, Call-App/GotO-App, password, protezioni |
 | Configurazione | `config.json`, default settings, date europee, 26 driver di stampa, colori per database, documentazione |
-| Qualità | 520 test, 25 lezioni del Tutorial, CI 3.11–3.13, ruff, smoke, E2E visuale, benchmark, screenshot canonici |
+| Qualità | 521 test, 25 lezioni del Tutorial, CI 3.11–3.13, ruff, smoke, E2E visuale, benchmark, screenshot canonici |
 
 ### Anteprime
 
@@ -431,7 +432,7 @@ adbx/
 │   ├── screen/       tastiera e input Qt
 │   ├── script/       motore di script
 │   └── shell/        controller e schermate
-├── tests/            520 test, 25 lezioni, performance, packaging
+├── tests/            521 test, 25 lezioni, performance, packaging
 ├── docs/
 │   ├── spec/         specifiche tecniche
 │   ├── reference/    inventario e manuali originali
