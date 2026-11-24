@@ -143,3 +143,47 @@ L'audit ha trovato 112 scritture fuori griglia in 15 punti:
   posting rules, field rules, app editor, documentation, view/browse records);
   8 E2E 800×475 rigenerati e ispezionati (view records, documentation).
 
+## Step 5 — 2026-11-24 — Reflow record, memo, lookup e liste
+
+- **Memo**: `MemoEditor` 92×21 → 76×20 e overlay 104×27 → 76×20, centrato
+  (righe 1-20, ombra sulla 21) così non invade più la status line.
+- **Lookup**: `LookupTableEditor.columns` calcola le larghezze sul budget
+  reale (`SCREEN_WIDTH - 4`, 76 colonne): prima colonna 24, le altre
+  `min(14, ...)`, minimo 8. Con sei colonne si resta in 74; prima si arrivava
+  a 88.
+- **Nuovo helper `visible_rows(top)`** in `widgets.py`: righe disponibili da
+  `top` alla status line. Sostituisce le slice fisse `[:16]`, `[:18]`,
+  `[:20]`, `[:22]`, `[:12]` in forms, labels, reports, indexes, searching,
+  sets e rules: le liste lunghe non scrivono più sopra la status line.
+- **Report formatting**: colonne da 84 a 79, larghezze per colonna (14/24/9/4/
+  5/5/4/5) — prima `Window` e le colonne oltre la 79 erano invisibili.
+- **Label formatting**: le celle erano tutte clippate a 18; ora larghezze per
+  colonna (22/16/4/4/4/8), `AVMOVIES.TAPE_TITLE` non viene più troncato.
+- **Conditional lookup databases**: colonne 20/14/13/14/15 (76 totali) con
+  intestazioni clippate; help line accorciate (erano 84 colonne).
+- `tools/capture_ui.py`: sette viste nuove — memo editor (57), report
+  formatting (58), label formatting (59), conditional table (60), conditional
+  databases (61), search sort (62), set integrity (63): 62 viste canoniche,
+  tutte sotto audit e tutte ispezionate.
+
+### Verifica di questo step
+
+- `pytest`: **520 test verdi** (+3 test di layout: `visible_rows`, memo,
+  lookup a sei colonne); fixture di audit attiva su tutta la suite.
+- Audit: **0 eventi** sulle 62 viste canoniche.
+- `./start.sh --smoke`: `adbx 1.0.0: griglia 80x25, digest 9f8b632350151a12`.
+- Visiva: PNG 880×525 rigenerati e ispezionati (memo, report/label
+  formatting, conditional table/databases, search sort, set integrity,
+  field/posting rules, dialog designer, debugger, app editor, documentation);
+  8 E2E 800×475 rigenerati e ispezionati.
+
+### Limiti accettati
+
+- Il designer dei report mostra un canvas di stampa più largo (il demo è
+  100 colonne, il titolo lo dichiara): le colonne oltre la 79 sono tagliate dal
+  bordo, come un canvas di stampa separato dalla griglia. È marcato
+  `@clipping_allowed` e lo stesso vale per i form salvati a 132 colonne e per
+  i custom form di set/record.
+- Form designer: un campo con lunghezza dati 6 mostra `[INV_N…`, perché il
+  segnaposto occupa esattamente l'area dati del campo.
+

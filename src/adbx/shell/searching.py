@@ -16,6 +16,7 @@ from .widgets import (
     Region,
     View,
     clip_text,
+    visible_rows,
     draw_help_line,
     draw_menu_line,
     draw_status_line,
@@ -643,7 +644,7 @@ class SearchSession:
         buffer.write(4, COL_CONNECTOR, "And/Or",
                      fg=self.theme.text, bg=self.theme.bg, bold=True)
         regions: list[Region] = []
-        for offset, row in enumerate(self.rows[:16]):
+        for offset, row in enumerate(self.rows[:visible_rows(SEARCH_TOP)]):
             screen_row = SEARCH_TOP + offset
             active = offset == self.row
             fg = self.theme.selected_fg if active else self.theme.text
@@ -683,7 +684,7 @@ class SearchSession:
         buffer.write(4, SORT_DIRECTION_COL, "Direction", fg=self.theme.text,
                      bg=self.theme.bg, bold=True)
         regions: list[Region] = []
-        for offset, (name, direction) in enumerate(self.sort_rows[:12]):
+        for offset, (name, direction) in enumerate(self.sort_rows[:visible_rows(SORT_TOP)]):
             screen_row = SORT_TOP + offset
             active = offset == self.sort_row
             fg = self.theme.selected_fg if active else self.theme.text

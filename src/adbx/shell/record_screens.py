@@ -231,7 +231,8 @@ def memo_overlay(session: RecordSession, theme: Theme = NEWPORT) -> View:
     title = f"Memo - {session.database.name}.{editor.field_name}"
     if editor.readonly:
         title += " (read only)"
-    width, height = 104, 27
+    # Memo dentro la griglia legacy: 76 colonne, righe 1..20 (l'ombra a 21).
+    width, height = 76, 20
     panel = window(width, height, title, theme)
     body_height = height - 5
     for offset in range(body_height):

@@ -147,6 +147,11 @@ def clip_text(text: str, width: int) -> str:
     return text if len(text) <= width else text[: max(0, width)]
 
 
+def visible_rows(top: int) -> int:
+    """Righe di contenuto disponibili da `top` fino alla status line."""
+    return max(0, STATUS_ROW - top)
+
+
 def elide_left(text: str, width: int) -> str:
     """Taglia l'inizio di un testo lungo, conservando la coda (nomi file)."""
     if width <= 0:
@@ -167,6 +172,7 @@ __all__ = [
     "draw_menu_line",
     "draw_status_line",
     "elide_left",
+    "visible_rows",
     "prompt_line",
     "shadow",
     "text_lines",

@@ -23,6 +23,7 @@ from .theme import NEWPORT, Theme
 from .widgets import (
     View,
     clip_text,
+    visible_rows,
     draw_help_line,
     draw_menu_line,
     draw_status_line,
@@ -824,7 +825,7 @@ class LabelDesigner:
         label = self.label
         assert label is not None
         title_bar(buffer, "Calculated Fields", self.theme)
-        for index, calc in enumerate(label.calcs[:20]):
+        for index, calc in enumerate(label.calcs[:visible_rows(3)]):
             row = 3 + index
             selected = index == self.calc_row
             fg = self.theme.selected_fg if selected else self.theme.text
@@ -857,7 +858,7 @@ class LabelDesigner:
         for header, column in zip(headers, columns):
             buffer.write(2, column, header, fg=self.theme.text,
                          bg=self.theme.bg, bold=True)
-        for index, item in enumerate(label.fields[:20]):
+        for index, item in enumerate(label.fields[:visible_rows(3)]):
             row = 3 + index
             selected = index == self.format_row
             fg = self.theme.selected_fg if selected else self.theme.text
@@ -868,10 +869,12 @@ class LabelDesigner:
                       item.format,
                       "" if item.decimals is None else str(item.decimals),
                       _yes(item.delete_line_if_empty))
+            widths = (22, 16, 4, 4, 4, 8)
             for column, (value, x) in enumerate(zip(values, columns)):
                 text = self.edit_text if selected and self.editing \
                     and column + 1 == self.format_col else value
-                buffer.write(row, x, clip_text(text, 18), fg=fg, bg=bg,
+                buffer.write(row, x, clip_text(text, widths[column]),
+                             fg=fg, bg=bg,
                              underline=selected and self.editing
                              and column + 1 == self.format_col)
         draw_status_line(buffer, self.theme,

@@ -41,6 +41,7 @@ from .widgets import (
     Region,
     View,
     clip_text,
+    visible_rows,
     draw_help_line,
     draw_menu_line,
     draw_status_line,
@@ -928,10 +929,17 @@ class LookupTableEditor(GridEditor):
         self.title = f"Lookup Table - {field_name}"
         self._load_cell()
 
+    # Larghezza utile della tabella: dalla colonna 2 alla 77.
+    TABLE_COLUMNS = SCREEN_WIDTH - 4
+
     @property
     def columns(self) -> tuple[tuple[str, int], ...]:
         titles = [self.field_name or "Choice"] + list(self.table.columns)
-        return tuple((name, 18 if index == 0 else 14)
+        if len(titles) == 1:
+            return ((titles[0], self.TABLE_COLUMNS),)
+        first = 24
+        rest = min(14, max(8, (self.TABLE_COLUMNS - first) // (len(titles) - 1)))
+        return tuple((name, first if index == 0 else rest)
                      for index, name in enumerate(titles))
 
     def row_count(self) -> int:
@@ -1446,7 +1454,7 @@ class ConditionalTableEditor:
         buffer.write(2, 52, "Choices", fg=self.theme.text, bg=self.theme.bg,
                      bold=True)
         regions: list[Region] = []
-        for index, group in enumerate(self.groups[:12]):
+        for index, group in enumerate(self.groups[:visible_rows(3)]):
             screen_row = 3 + index
             selected = index == self.row
             fg = self.theme.selected_fg if selected else self.theme.text
@@ -1473,8 +1481,8 @@ class ConditionalTableEditor:
                          self.status or "F6 add condition   F7 edit table   "
                                        "F10 continue")
         draw_help_line(buffer, self.theme,
-                       "F5 delete condition   F6 add condition   "
-                       "F7 table   F9 fall through   F10 continue")
+                       "F5 delete   F6 add   F7 table   F9 fall through   "
+                       "F10 continue")
         regions.extend(draw_menu_line(buffer, self.theme, GRID_KEYS))
         return View(buffer, regions)
 
@@ -1502,9 +1510,9 @@ class ConditionalDatabaseEditor:
         self.theme = theme
         self.database = database
         self.fallback_database = fallback_database
-        self.columns = (("Expression", 20), ("Database", 12),
-                        ("Link index", 12), ("Display index", 12),
-                        ("Filter", 16))
+        self.columns = (("Expression", 20), ("Database", 14),
+                        ("Link index", 13), ("Display index", 14),
+                        ("Filter", 15))
         self._load()
 
     def _load(self) -> None:
@@ -1601,11 +1609,11 @@ class ConditionalDatabaseEditor:
                      fg=self.theme.label, bg=self.theme.bg)
         col = 2
         for label, width in self.columns:
-            buffer.write(3, col, label, fg=self.theme.text, bg=self.theme.bg,
-                         bold=True)
+            buffer.write(3, col, clip_text(label, width - 1),
+                         fg=self.theme.text, bg=self.theme.bg, bold=True)
             col += width
         regions: list[Region] = []
-        for index, group in enumerate(self.groups[:12]):
+        for index, group in enumerate(self.groups[:visible_rows(4)]):
             screen_row = 4 + index
             selected = index == self.row
             fg = self.theme.selected_fg if selected else self.theme.text
@@ -1628,8 +1636,7 @@ class ConditionalDatabaseEditor:
         draw_status_line(buffer, self.theme,
                          self.status or "F6 add condition   F10 continue")
         draw_help_line(buffer, self.theme,
-                       "F5 delete condition   F6 add condition   "
-                       "F10 continue   ESC cancel")
+                       "F5 delete   F6 add   F10 continue   ESC cancel")
         regions.extend(draw_menu_line(buffer, self.theme, GRID_KEYS))
         return View(buffer, regions)
 

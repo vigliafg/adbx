@@ -37,6 +37,7 @@ from .theme import NEWPORT, Theme
 from .widgets import (
     View,
     clip_text,
+    visible_rows,
     draw_help_line,
     draw_menu_line,
     draw_status_line,
@@ -863,7 +864,7 @@ class IntegrityEditor:
                      bg=self.theme.bg, bold=True)
         buffer.write(2, 28, "Child field", fg=self.theme.text,
                      bg=self.theme.bg, bold=True)
-        for index, (parent, child) in enumerate(self.rows[:18]):
+        for index, (parent, child) in enumerate(self.rows[:visible_rows(3)]):
             screen_row = 3 + index
             selected = index == self.row
             fg = self.theme.selected_fg if selected else self.theme.text
@@ -1472,7 +1473,7 @@ class SetSession:
             rows = self.child_rows()
             self.child_index = max(0, min(self.child_index,
                                           max(0, len(rows) - 1)))
-            for offset, (seq, values) in enumerate(rows[:12]):
+            for offset, (seq, values) in enumerate(rows[:visible_rows(child_row + 2)]):
                 screen_row = child_row + 2 + offset
                 selected = (offset == self.child_index
                             and self.focus == "child")

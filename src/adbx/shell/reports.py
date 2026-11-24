@@ -51,6 +51,7 @@ from .theme import NEWPORT, Theme
 from .widgets import (
     View,
     clip_text,
+    visible_rows,
     draw_help_line,
     draw_menu_line,
     draw_status_line,
@@ -1514,7 +1515,7 @@ class ReportDesigner:
                      bold=True)
         buffer.write(2, 16, headers[1], fg=self.theme.text, bg=self.theme.bg,
                      bold=True)
-        for index, calc in enumerate(report.calcs[:22]):
+        for index, calc in enumerate(report.calcs[:visible_rows(3)]):
             row = 3 + index
             selected = index == self.calc_row
             fg = self.theme.selected_fg if selected else self.theme.text
@@ -1548,7 +1549,7 @@ class ReportDesigner:
         for header, column in zip(headers, columns):
             buffer.write(2, column, header, fg=self.theme.text,
                          bg=self.theme.bg, bold=True)
-        for index, summary in enumerate(report.summaries[:22]):
+        for index, summary in enumerate(report.summaries[:visible_rows(3)]):
             row = 3 + index
             selected = index == self.summary_row
             fg = self.theme.selected_fg if selected else self.theme.text
@@ -1571,11 +1572,11 @@ class ReportDesigner:
         title_bar(buffer, "Formatting Options", self.theme)
         headers = ("Section", "Field", "Data", "Len", "Just", "Fmt", "Dec",
                    "Window")
-        columns = (2, 16, 54, 62, 67, 73, 79, 84)
+        columns = (2, 17, 42, 52, 57, 63, 69, 74)
         for header, column in zip(headers, columns):
             buffer.write(2, column, header, fg=self.theme.text,
                          bg=self.theme.bg, bold=True)
-        for index, item in enumerate(self._format_rows()[:22]):
+        for index, item in enumerate(self._format_rows()[:visible_rows(3)]):
             row = 3 + index
             selected = index == self.format_row
             fg = self.theme.selected_fg if selected else self.theme.text
@@ -1587,7 +1588,7 @@ class ReportDesigner:
                       item.justification, item.format,
                       "" if item.decimals is None else str(item.decimals),
                       str(item.window))
-            widths = (14, 38, 8, 5, 6, 6, 5, 8)
+            widths = (14, 24, 9, 4, 5, 5, 4, 5)
             for column, (value, x) in enumerate(zip(values, columns)):
                 text = self.edit_text if selected and self.editing \
                     and column + 1 == self.format_col else value

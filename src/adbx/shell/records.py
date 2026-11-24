@@ -61,8 +61,8 @@ class MemoEditor:
     col: int = 0
     top: int = 0
     left: int = 0
-    width: int = 92
-    height: int = 21
+    width: int = 76
+    height: int = 20  # lascia la riga 21 all'ombra del popup
 
     def __post_init__(self) -> None:
         self.lines = self.text.split("\n") if self.text else [""]

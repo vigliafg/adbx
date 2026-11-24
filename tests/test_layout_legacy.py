@@ -125,3 +125,33 @@ def test_golden_snapshots_use_the_legacy_grid(name):
         encoding="utf-8")
     assert text.splitlines()[0] == "adbx 80x25"
     assert len(text.splitlines()) == 1 + 2 * SCREEN_HEIGHT
+
+
+def test_visible_rows_stop_at_the_status_line():
+    from adbx.shell.widgets import visible_rows
+
+    assert visible_rows(3) == STATUS_ROW - 3
+    assert visible_rows(STATUS_ROW) == 0
+    assert visible_rows(STATUS_ROW + 2) == 0
+
+
+def test_memo_editor_fits_between_the_borders():
+    from adbx.shell.records import MemoEditor
+
+    editor = MemoEditor("TAPE_DESC", "hello")
+    # L'ombra del popup cade sulla riga subito sotto il pannello.
+    assert editor.width <= SCREEN_WIDTH - 4
+    assert editor.height <= STATUS_ROW - 2
+
+
+def test_lookup_table_columns_fit_the_grid():
+    from adbx.data.rules import LookupTable
+    from adbx.shell.rules import LookupTableEditor
+
+    table = LookupTable(columns=["A", "B", "C", "D", "E"],
+                        rows=[["x"] * 6])
+    editor = LookupTableEditor(table, field_name="CHOICE")
+    widths = [width for _name, width in editor.columns]
+    assert len(widths) == 6
+    assert sum(widths) <= SCREEN_WIDTH - 4
+    assert widths[0] == 24

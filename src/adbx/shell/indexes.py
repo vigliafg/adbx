@@ -15,6 +15,7 @@ from .widgets import (
     Region,
     View,
     clip_text,
+    visible_rows,
     draw_help_line,
     draw_menu_line,
     draw_status_line,
@@ -477,7 +478,7 @@ class IndexSession:
         buffer.write(4, DIRECTION_COL, "Direction", fg=self.theme.text,
                      bg=self.theme.bg, bold=True)
         regions: list[Region] = []
-        for offset, (name, direction) in enumerate(self.levels[:16]):
+        for offset, (name, direction) in enumerate(self.levels[:visible_rows(TABLE_TOP)]):
             row = TABLE_TOP + offset
             active = offset == self.row
             fg = self.theme.selected_fg if active else self.theme.text

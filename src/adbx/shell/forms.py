@@ -36,6 +36,7 @@ from .theme import NEWPORT, Theme
 from .widgets import (
     View,
     clip_text,
+    visible_rows,
     draw_help_line,
     draw_menu_line,
     draw_status_line,
@@ -798,7 +799,7 @@ class FormDesigner:
         for header, col in zip(headers, columns):
             buffer.write(2, col, header, fg=self.theme.text, bg=self.theme.bg,
                          bold=True)
-        for index, item in enumerate(self._formatting_rows()[:18]):
+        for index, item in enumerate(self._formatting_rows()[:visible_rows(3)]):
             row = 3 + index
             selected = index == self.format_row
             fg = self.theme.selected_fg if selected else self.theme.text

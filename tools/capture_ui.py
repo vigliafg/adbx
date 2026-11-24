@@ -52,7 +52,13 @@ from adbx.data.reports import (  # noqa: E402
     ReportSummary,
     ReportText,
 )
-from adbx.data.rules import FieldRule, LookupTable, PostingRule  # noqa: E402
+from adbx.data.rules import (  # noqa: E402
+    ConditionalDatabase,
+    ConditionalGroup,
+    FieldRule,
+    LookupTable,
+    PostingRule,
+)
 from adbx.data.sets import Link, SetDefinition  # noqa: E402
 from adbx.data.workspace import Workspace  # noqa: E402
 from adbx.render.qt_renderer import CellRenderer  # noqa: E402
@@ -92,6 +98,8 @@ from adbx.shell.records import RecordSession  # noqa: E402
 from adbx.shell.relational import RelationalSession  # noqa: E402
 from adbx.shell.reports import ReportDesigner, ReportPreview  # noqa: E402
 from adbx.shell.rules import (  # noqa: E402
+    ConditionalDatabaseEditor,
+    ConditionalTableEditor,
     LookupTableEditor,
     PostingEditor,
     RulesSession,
@@ -103,7 +111,7 @@ from adbx.shell.scripts import (  # noqa: E402
     ScriptEditor,
 )
 from adbx.shell.searching import SearchSession  # noqa: E402
-from adbx.shell.sets import SetDesigner, SetSession  # noqa: E402
+from adbx.shell.sets import IntegrityEditor, SetDesigner, SetSession  # noqa: E402
 from adbx.shell.settings import (  # noqa: E402
     ColorSession,
     DefaultsSession,
@@ -180,6 +188,11 @@ def build_views() -> dict[str, View]:
         search_session.description = "Children's movies rated G"
         search_session.stage = "search"
         search_session._load_cell()
+        sort_session = SearchSession(database, letter="A")
+        sort_session.rows = [SearchRow("SUBJECT", "=", "Children's", "AND")]
+        sort_session.sort_rows = [("TAPE_TITLE", "A"), ("RUNTIME", "D")]
+        sort_session.stage = "sort"
+        sort_session._load_cell()
         view_shot = RecordSession(database, "view").view()
         browse_shot = RecordSession(database, "browse").view()
         indexing.run_search(
@@ -214,6 +227,17 @@ def build_views() -> dict[str, View]:
             PostingRule("STOCK", "QOH", "Subtract", "", "",
                         linking_index="STOCKCOD", common="TAPE_ID")],
             database=database)
+        conditional_editor = ConditionalTableEditor([
+            ConditionalGroup('RATING="G"', table=LookupTable(
+                ["SUBJECT"], [["Children's"], ["Comedy"]])),
+            ConditionalGroup('RATING="R"', table=LookupTable(
+                ["SUBJECT"], [["Action/Adventure"], ["Drama"]])),
+        ], LookupTable(["SUBJECT"], [["Children's"]]), database=database,
+            field_name="SUBJECT")
+        conditional_databases = ConditionalDatabaseEditor([
+            ConditionalDatabase('RATING="G"', "AVMOVIES"),
+            ConditionalDatabase('RATING="R"', "AVMOVIES")],
+            database=database, fallback_database="AVMOVIES")
 
         header = workspace.create_database("AVHEADER", [
             Field("INV_NO", "C", 6), Field("CUST_ID", "C", 6),
@@ -253,6 +277,9 @@ def build_views() -> dict[str, View]:
         set_designer.selected = 2
         set_designer.row = 3
         set_designer._load_row()
+        integrity_editor = IntegrityEditor(
+            rows=[("TAPE_ID", "TAPE_ID"), ("SUBJECT", "SUBJECT")],
+            parent=header, child=patrons)
         movie_form = FormDefinition(workspace, "AVMOVIES", "A",
                                     "Alpha Video Movie")
         movie_form.labels = [
@@ -363,6 +390,11 @@ def build_views() -> dict[str, View]:
         report_grouping = ReportDesigner(
             workspace, database, owner="AVMOVIES", report=movie_report,
             stage="grouping")
+        report_formatter = ReportDesigner(
+            workspace, database, owner="AVMOVIES", report=movie_report,
+            stage="formatting")
+        report_formatter.section = "detail"
+        report_formatter.format_row = 2
         report_output = render_report(movie_report, workspace)
         report_preview = ReportPreview(
             report_output, movie_report.label,
@@ -390,6 +422,10 @@ def build_views() -> dict[str, View]:
             stage="layout")
         label_designer.row = 2
         label_designer.col = 1
+        label_formatter = LabelDesigner(
+            workspace, database, owner="AVMOVIES", label=movie_label,
+            stage="formatting")
+        label_formatter.format_row = 1
         label_preview = ReportPreview(
             render_labels(movie_label, workspace), movie_label.label,
             pdf_path=workspace.directory / "AVMOVIES-A-label.pdf")
@@ -425,6 +461,18 @@ def build_views() -> dict[str, View]:
         lookup_record.field_index = 3
         lookup_record._load_field()
         lookup_record._open_lookup()
+        memo_record = RecordSession(database, "view")
+        memo_record.field_index = 2
+        memo_record._open_memo()
+        memo_record.memo.set_text(
+            "A Disney cartoon favorite.\n"
+            "\n"
+            "Dumbo is a 1941 American animated film produced by\n"
+            "Walt Disney Productions. The fourth Disney animated\n"
+            "feature film, it is based upon the story of Dumbo the\n"
+            "flying elephant.")
+        memo_record.memo.row = 2
+        memo_record.memo.col = 6
 
         history = indexing.search_history(database)
         state.database = database
@@ -646,6 +694,13 @@ def build_views() -> dict[str, View]:
             "54-printer-driver": printer_edit.view(),
             "55-screen-colors": color_session.view(),
             "56-documentation": doc_session.view(),
+            "57-memo-editor": memo_record.view(),
+            "58-report-formatting": report_formatter.view(),
+            "59-label-formatting": label_formatter.view(),
+            "60-conditional-table": conditional_editor.view(),
+            "61-conditional-databases": conditional_databases.view(),
+            "62-search-sort": sort_session.view(),
+            "63-set-integrity": integrity_editor.view(),
         }
     return shots
 
