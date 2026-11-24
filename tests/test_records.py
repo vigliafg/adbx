@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from support import open_directory
+
 from adbx.data.fields import Field
 from adbx.data.workspace import Workspace
 from adbx.screen.keys import Key
@@ -32,8 +34,7 @@ def _mode(controller: ShellController, down: int) -> None:
 
 
 def test_lesson_2_create_database_from_directory(tmp_path):
-    controller = ShellController(tmp_path)
-    assert controller.base == "directory"
+    controller = open_directory(ShellController(tmp_path))
 
     controller.handle(Key("F5"))
     assert controller.overlay is not None and controller.overlay.kind == "prompt"
@@ -105,6 +106,101 @@ def test_lesson_4_enter_mode_keeps_accepting_records(tmp_path):
     assert controller.records.seq is None
     controller.handle(Key("ESC"))
     assert controller.base == "menu"
+
+
+def test_ctrl_enter_saves_and_opens_next_record(tmp_path):
+    path = _create_database(tmp_path, [Field("NAME", "C", 20),
+                                      Field("CITY", "C", 20)])
+    controller = _open(path)
+    _mode(controller, 1)  # Enter records
+    _type(controller, "Ada")
+    controller.handle(Key("ENTER", ctrl=True))
+
+    assert controller.records.mode == "enter"
+    assert controller.records.seq is None
+    assert controller.records.field_index == 0
+    assert controller.database.count() == 1
+    assert controller.database.read(1)["NAME"] == "Ada"
+
+    _type(controller, "Bob")
+    controller.handle(Key("F10"))
+    assert controller.base == "menu"
+    assert controller.database.count() == 2
+
+
+def test_enter_key_is_advertised_on_the_last_field(tmp_path):
+    path = _create_database(tmp_path, [Field("NAME", "C", 20),
+                                      Field("CITY", "C", 20)])
+    controller = _open(path)
+    _mode(controller, 1)  # Enter records
+    assert ("ENTER", "Next record") not in controller.records.menu_entries
+    controller.handle(Key("TAB"))
+    assert ("ENTER", "Next record") in controller.records.menu_entries
+
+
+def test_view_enter_returns_to_view_and_browses_records(tmp_path):
+    path = _create_database(tmp_path, [Field("NAME", "C", 20)])
+    controller = _open(path)
+    _mode(controller, 1)  # Enter records
+    for name in ("Ada", "Bob"):
+        _type(controller, name)
+        controller.handle(Key("ENTER"))
+    controller.handle(Key("ESC"))
+    assert controller.base == "menu"
+    assert controller.database.count() == 2
+
+    _mode(controller, 0)  # View records
+    assert controller.records.mode == "view"
+    assert controller.records.current_seq == 1
+
+    # E da View: si entra in Enter; F10 salva e torna a View sul record nuovo.
+    controller.handle(Key("E"))
+    assert controller.records.mode == "enter"
+    _type(controller, "Cara")
+    controller.handle(Key("F10"))
+    assert controller.base == "records"
+    assert controller.records.mode == "view"
+    assert controller.records.current_seq == 3
+    assert "Cara" in "\n".join(controller.view().buffer.to_lines())
+
+    # Le frecce scorrono i record già inseriti.
+    controller.handle(Key("UP"))
+    assert controller.records.current_seq == 2
+    controller.handle(Key("UP"))
+    assert controller.records.current_seq == 1
+
+
+def test_escape_in_enter_returns_to_view_without_saving(tmp_path):
+    path = _create_database(tmp_path, [Field("NAME", "C", 20)])
+    controller = _open(path)
+    _mode(controller, 1)
+    _type(controller, "Ada")
+    controller.handle(Key("ENTER"))
+    controller.handle(Key("ESC"))
+    _mode(controller, 0)
+
+    controller.handle(Key("E"))
+    _type(controller, "Bob")
+    controller.handle(Key("ESC"))
+    assert controller.base == "records"
+    assert controller.records.mode == "view"
+    assert controller.database.count() == 1
+
+
+def test_f10_on_blank_enter_record_returns_to_view(tmp_path):
+    path = _create_database(tmp_path, [Field("NAME", "C", 20)])
+    controller = _open(path)
+    _mode(controller, 1)
+    _type(controller, "Ada")
+    controller.handle(Key("ENTER"))
+    controller.handle(Key("ESC"))
+    _mode(controller, 0)
+
+    controller.handle(Key("E"))
+    controller.handle(Key("F10"))
+    assert controller.base == "records"
+    assert controller.records.mode == "view"
+    assert controller.database.count() == 1
 
 
 def test_lesson_5_change_record(tmp_path):

@@ -83,11 +83,14 @@ alla geometria logica.
    pixel di dispositivo moltiplicati per il `devicePixelRatio`): su schermi
    molto grandi il testo non diventa enorme e la griglia lascia margini.
    Mai sotto 7 px (illeggibile), mai sopra 72 px.
-5. Lo zoom utente è un **fattore** su quel corpo: `CTRL-+` / `CTRL--` a passi
-   del 10% (50–200%), `CTRL-0` riporta al 100%, il livello è salvato in
-   `config.json` (`screen_zoom`). Lo zoom non supera mai il massimo che entra
-   nella finestra: la griglia non viene tagliata e il titolo mostra `(max)`
-   quando il livello richiesto non è raggiungibile.
+5. Lo zoom utente è un **fattore** sul corpo di riferimento al 100%:
+   `CTRL-+` / `CTRL--` a passi del 10% (50–200%), `CTRL-0` riporta al 100%,
+   il livello è salvato in `config.json` (`screen_zoom`). Al 100% il corpo è
+   il massimo che entra nella finestra (o il tetto di leggibilità); quando la
+   finestra limita, `CTRL-+` allarga anche la finestra fino allo schermo per
+   contenere il corpo maggiore, e `F11` usa tutto lo schermo. Lo zoom non
+   supera mai il massimo che entra: la griglia non viene tagliata e il titolo
+   mostra `(max)` quando il livello richiesto non è raggiungibile.
 6. La griglia risultante è centrata nella finestra; i margini usano il colore
    di fondo dell'interfaccia, quindi non appaiono come barre nere.
 7. `F11` commuta il full screen; lo stesso algoritmo porta la griglia alla

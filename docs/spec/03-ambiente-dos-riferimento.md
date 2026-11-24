@@ -58,6 +58,14 @@ EMS, XMS e modalità video sono sufficienti.
   a 80×25 nel DOSBox.
 - Il main menu dell'originale ha una finestra più stretta e un solo bordo;
   adbx conserva la stessa disposizione logica e gli stessi hot key.
+- Avvio di riferimento: `tools/run_alpha4_dosbox.sh` parte in **output TTF**
+  con `ptsize=58`; la finestra misurata su schermo 4096×2160 è **2320×1450**
+  e i caratteri sono ridisegnati vettorialmente. `F12-Up`/`F12-Down` regolano
+  il corpo. `--no-ttf` torna al framebuffer bitmap (720×400, scalato).
+- La finestra TTF non è ridimensionabile per scelta di DOSBox-X: la
+  dimensione deriva dal corpo del font. Per il confronto a pixel usare
+  `--no-ttf` (oppure `openglpp`/`openglnb`), sapendo che il font è l'8×16
+  originale e non il TTF.
 - Le lezioni del Tutorial vanno eseguite in DOSBox-X quando un
   comportamento non è chiaro dalla documentazione, e il risultato va
   annotato nel diario.

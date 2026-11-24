@@ -77,6 +77,18 @@ def test_screen_zoom_is_clamped_and_persisted(tmp_path):
     assert ConfigStore(tmp_path).defaults.screen_zoom == 130
 
 
+def test_zoom_base_uses_max_fit_and_zoom_scales_it():
+    from adbx.config.display import base_pixel_size, zoom_pixel_size
+
+    # Il 100% è il massimo che entra (o il tetto).
+    assert base_pixel_size(18, 24) == 18
+    assert base_pixel_size(40, 72) == 40
+    assert base_pixel_size(43, 24) == 24
+    # Lo zoom è un fattore su quel corpo.
+    assert zoom_pixel_size(40, 110) == 44
+    assert zoom_pixel_size(24, 150) == 36
+
+
 def test_printer_catalog_has_26_models_and_letters():
     assert len(PRINTER_MODELS) == 26
     assert len(LETTERS) == 26

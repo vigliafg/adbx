@@ -31,10 +31,15 @@ python -m pip install -e .
 adbx --data ~/dati
 ```
 
-La prima schermata è il **Database Directory**. Con le frecce si sceglie un
-`.DBF` o `.SET`, con ENTER lo si apre. Il filtro accetta `*` e `?`. F3 importa,
-F4 mostra la cronologia, F5 crea un database, F6 aggiorna, F8 mostra i
-dettagli, F9 è riservato al DOS e non è disponibile.
+All'avvio compare il **banner** con l'ultimo database/set usato in basso.
+`F10` (Continue) — o una breve attesa — carica quel database e porta al
+**main menu**; `F9` (Change Database/Set) apre subito il **Database
+Directory**. Senza un database precedente, `F10` porta al Database Directory.
+
+Nel Database Directory con le frecce si sceglie un `.DBF` o `.SET` e con
+ENTER lo si apre. Il filtro accetta `*` e `?`. F3 importa, F4 mostra la
+cronologia, F5 crea un database, F6 aggiorna, F8 mostra i dettagli, F9 è
+riservato al DOS e non è disponibile. `ESC` torna al main menu.
 
 ## 2. Tastiera e schermo
 
@@ -43,9 +48,17 @@ dettagli, F9 è riservato al DOS e non è disponibile.
 - `ALT-F3` menu degli script, `ALT-F4` suona uno script.
 - `ALT-F1` registra `UNTITLED`, `ALT-F2` lo suona.
 - `CTRL-F1`…`CTRL-F10` suonano `CTRLF1`…`CTRLF10`.
+- `CTRL-+` / `CTRL--` cambiano lo zoom (50–200%), `CTRL-0` torna al 100%;
+  se la finestra non basta allo zoom richiesto il titolo mostra `(max)`.
 - Nel main menu la lettera maiuscola del comando è la hot key.
 - Nei record: `F` Find, `L` Locate, `I` indice, `R` range, `S` replace,
   `ALT-M` memo, `ALT-D` cancella, `ALT-U` richiama, `T` Tools.
+- In Enter: `ENTER` sull'ultimo campo o `CTRL-ENTER` salvano e aprono il
+  record successivo; `F10` salva ed esce dalla modalità (torna a View se sei
+  entrato da View con `E`, altrimenti al menu).
+- Nella form Enter `UP`/`DOWN` spostano tra i **campi**, non tra i record.
+  Per rivedere i record già inseriti usa View: `E` da View entra in Enter,
+  `F10`/`ESC` tornano a View e le frecce scorrono i record.
 
 I nomi dei file sono DOS 8.3. Database, set, indici, script, lettere e
 applicazioni usano lettere A–Z o nomi brevi.

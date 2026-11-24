@@ -28,6 +28,9 @@ Fonti: Reference Manual cap. 22 e appendice 6.
 `ConfigStore` legge e scrive il file in modo atomico. Le vecchie funzioni
 `load_printers`/`save_printers` restano per i file separati.
 
+`last_database` è scritto automaticamente quando si apre un database o un set
+e alimenta il banner di apertura (vedi `docs/spec/02-shell.md`).
+
 Le impostazioni che incidono davvero sul motore:
 
 - **Date separator** e **Date format**: `fields.configure_dates` cambia

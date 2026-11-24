@@ -108,7 +108,7 @@ celle Length/Decimal si aggiornano e non sono più modificabili.
 | Browse records | tabella | `B` |
 | Delete/recall records | View con i cancellati visibili | `D` |
 
-### Tasti comuni
+### Tasti comuni (View e Browse)
 
 | Tasto | Azione |
 |---|---|
@@ -116,24 +116,35 @@ celle Length/Decimal si aggiornano e non sono più modificabili.
 | `TAB` / `SHIFT-TAB` | ±10 record |
 | `PGUP` / `PGDN` | ±10 record (una pagina in Browse) |
 | `CTRL-HOME` / `CTRL-END` | primo/ultimo record |
+| `E` | entra in Enter mode |
 | `F7` | mostra/nascondi i cancellati (`*` in Browse) |
 | `ALT-D` / `ALT-U` | cancella / richiama il record |
 | `ALT-M` | memo del campo corrente (o primo memo) |
 | `ALT-F5` / `ALT-F6` | copia / incolla il campo |
-| `F10` / `ESC` | salva/continua, annulla |
+| `F10` / `ESC` | chiude la modalità |
 
 ### Enter e Change
 
+- Nella form Enter `UP`/`DOWN`/`ENTER`/`TAB` spostano tra i **campi**, non
+  tra i record: i record già inseriti si rivedono in View (o Change).
+- Da View, `E` entra in Enter mantenendo View come ritorno; `F10` (salva) ed
+  `ESC` (annulla) tornano a View, sul record appena salvato o su quello
+  corrente. Le frecce scorrono poi i record già inseriti. Entrando in Enter
+  dal main menu, invece, `F10`/`ESC` tornano al main menu, come l'originale.
 - `TAB` e `ENTER` passano al campo successivo; `SHIFT-TAB`/`UP` al precedente.
 - `LEFT`/`RIGHT`/`HOME`/`END` spostano il cursore nel campo;
   `CTRL-LEFT`/`CTRL-RIGHT` vanno al primo/ultimo campo.
 - `BACKSPACE`, `DELETE`, `CTRL-BACKSPACE` (svuota), `INSERT`
   (inserimento/sovrascrittura).
-- In Enter, `ENTER` sull'ultimo campo salva e apre un nuovo record; `F10`
-  salva e torna al menu.
+- In Enter, `ENTER` sull'ultimo campo o `CTRL-ENTER` da qualunque campo
+  salvano e aprono un nuovo record; sull'ultimo campo la command line mostra
+  `ENTER Next record`. `F10` salva e torna alla modalità precedente (o al
+  menu se Enter è stato scelto dal main menu), come il Continue/Save
+  dell'originale.
 - In Change, `PGUP`/`PGDN` cambiano record solo dopo il salvataggio o
   l'annullamento delle modifiche.
-- Un record completamente vuoto non viene salvato.
+- Un record completamente vuoto non viene salvato; `F10` su un nuovo record
+  vuoto esce dalla modalità senza creare nulla.
 
 ### Browse
 

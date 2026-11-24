@@ -13,3 +13,6 @@ dist/
 
 # archivi originali forniti dall'utente (non versionati)
 /DRIVEC*.zip
+
+# configurazione locale (equivalente A4.DFL), creata all'avvio
+/config.json

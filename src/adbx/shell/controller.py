@@ -389,12 +389,15 @@ class ShellController:
         self.pending_saved_search = ""
         self.overlay_chosen: list[str] = []
         self.return_base = "menu"
+        self.startup_path: Path | None = None
 
         if open_path is not None:
             self._open_entry(Path(open_path))
+            self.base = "menu"
         else:
             self.state.refresh()
-        self.base = "menu" if self.state.current else "directory"
+            self.startup_path = self._saved_database()
+            self.base = "banner"
         self.cursor = self.first = self._first_file_index()
         self._sync_input()
         self._autostart()
@@ -485,6 +488,8 @@ class ShellController:
             base = screens.directory(
                 self.state, self.cursor, self.input_text, self.input_cursor,
                 self.first, self.theme)
+        elif self.base == "banner":
+            base = screens.sign_on(self.state, self.startup_path, self.theme)
         elif self.base == "structure":
             base = screens.structure(self.state, self.structure_page, self.theme)
         elif self.base == "status":
@@ -669,6 +674,8 @@ class ShellController:
             self._handle_documentation(key)
         elif self.base == "directory":
             self._handle_directory(key)
+        elif self.base == "banner":
+            self._handle_banner(key)
         elif self.base == "structure":
             self._handle_structure(key)
         elif self.base == "status":
@@ -911,6 +918,7 @@ class ShellController:
                 self.menu_index = 0
                 self.overlay = None
                 self._sync_input()
+                self._remember_database(path)
             return
         try:
             current = self.state.open(path)
@@ -925,6 +933,7 @@ class ShellController:
         self.menu_index = 0
         self.overlay = None
         self._sync_input()
+        self._remember_database(path)
         if database.locked:
             self.pending_path = path
             self._prompt_unlock(database)
@@ -954,10 +963,35 @@ class ShellController:
         if self.input_text != self._selected_text():
             self._sync_input()
             return
-        if self.state.current is not None:
-            self.base = "menu"
-        else:
-            self._notice("Select a database or set first.")
+        self.base = "menu"
+
+    # -- schermata di apertura ------------------------------------------
+    def _handle_banner(self, key: Key) -> None:
+        if key.name in ("F10", "ENTER"):
+            self.banner_continue()
+        elif key.name in ("F9", "ESC"):
+            self.startup_path = None
+            self._show_directory()
+
+    def banner_continue(self) -> None:
+        """Conferma il database predefinito (F10 o attesa della GUI)."""
+        if self.base != "banner":
+            return
+        path = self.startup_path
+        self.startup_path = None
+        if path is not None and path.is_file():
+            self._open_entry(path)
+            if self.base == "menu":
+                self._autostart()
+                return
+        self._show_directory()
+        self._autostart()
+
+    def _show_directory(self) -> None:
+        self.state.refresh()
+        self.base = "directory"
+        self.cursor = self.first = self._first_file_index()
+        self._sync_input()
 
     # -- menu ------------------------------------------------------------
     def _handle_menu(self, key: Key) -> None:
@@ -1189,7 +1223,7 @@ class ShellController:
         if session is not None and session.saved_database is not None:
             self._adopt_database(session.saved_database)
         else:
-            self.base = "menu" if self.state.current is not None else "directory"
+            self.base = "menu"
 
     def _adopt_database(self, database: Database, *, path: Path | None = None) -> None:
         self.workspace = database.workspace
@@ -1199,6 +1233,7 @@ class ShellController:
             self.workspace.pattern_mode = self.config_file.defaults.pattern
         self.state.database = database
         target = path or database.source
+        self._remember_database(target)
         try:
             self.state.open(target)
             self.state.change_directory(database.source.parent)
@@ -1486,7 +1521,7 @@ class ShellController:
                     self.state.refresh()
                 except OSError:
                     pass
-                self.base = "directory"
+                self.base = "menu"
                 self.cursor = self.first = self._first_file_index()
                 self._sync_input()
             self._notice(f"Database {name} erased.")
@@ -1500,6 +1535,32 @@ class ShellController:
         configure_printer(self.config_file.printers.active)
         if getattr(self, "workspace", None) is not None:
             self.workspace.pattern_mode = defaults.pattern
+
+    def _saved_database(self) -> Path | None:
+        """Percorso dell'ultimo database/set usato, se esiste ancora."""
+        if self.config_file is None:
+            return None
+        text = (self.config_file.defaults.last_database or "").strip()
+        if not text:
+            return None
+        path = Path(text).expanduser()
+        return path if path.is_file() else None
+
+    def _remember_database(self, path: Path) -> None:
+        """Salva l'ultimo database/set in config.json (equivalente A4.DFL)."""
+        if self.config_file is None:
+            return
+        try:
+            resolved = str(Path(path).expanduser().resolve())
+        except OSError:
+            return
+        if self.config_file.defaults.last_database == resolved:
+            return
+        self.config_file.defaults.last_database = resolved
+        try:
+            self.config_file.save()
+        except ConfigError:
+            pass
 
     def _apply_owner_theme(self, owner: str) -> None:
         workspace = self._workspace()
@@ -4182,7 +4243,7 @@ class ShellController:
             self.state.database = None
             self.state.set_name = ""
             self.state.current = None
-            self.base = "directory"
+            self.base = "menu"
             self.overlay = None
             self._notice("Database closed.")
             return

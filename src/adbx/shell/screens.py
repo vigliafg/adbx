@@ -70,6 +70,10 @@ MAIN_MENU_KEYS = [
     ("Alt-F9", "DOS access"),
 ]
 
+SIGN_ON_KEYS = [("F10", "Continue"), ("F9", "Change Database/Set")]
+SIGN_ON_HELP = ("Press F10 to continue with the last database/set, "
+                "F9 to choose another")
+
 DIRECTORY_TITLE = "Database Directory"
 DIRECTORY_KEYS = [("F3", "Import"), ("F4", "History on"), ("F6", "Refresh"),
                   ("F5", "Create Db"), ("F8", "Detail on"), ("F9", "DOS")]
@@ -155,6 +159,40 @@ def main_menu(state: ShellState, selected: int = 0,
     topic_id = COMMANDS[selected][1]
     draw_help_line(buffer, theme, COMMAND_HELP.get(topic_id, MAIN_MENU_HELP))
     regions.extend(draw_menu_line(buffer, theme, MAIN_MENU_KEYS))
+    return View(buffer, regions)
+
+
+def sign_on(state: ShellState, startup_path: Path | None = None,
+            theme: Theme = NEWPORT) -> View:
+    """Schermata di apertura (banner) con il database/set predefinito."""
+    buffer = CellBuffer(SCREEN_WIDTH, SCREEN_HEIGHT, Cell(fg=theme.text, bg=theme.bg))
+    buffer.fill_rect(0, 0, SCREEN_HEIGHT, SCREEN_WIDTH, " ",
+                     fg=theme.text, bg=theme.bg)
+
+    logo = [
+        "A L P H A   F O U R",
+        "Version 3.0",
+        "",
+        "Alpha Software Corp.   Copyright 1986-1993   All Rights Reserved",
+        "",
+        "adbx — clone of Alpha Four v3",
+    ]
+    row = 10
+    for text in logo:
+        if text:
+            buffer.write(row, max(1, (SCREEN_WIDTH - len(text)) // 2), text,
+                         fg=theme.accent if row == 10 else theme.text,
+                         bg=theme.bg, bold=row in (10, 11))
+        row += 1
+
+    # Come l'originale: il database/set predefinito sulla riga di stato.
+    if startup_path is not None:
+        default_text = f"Default database/set : {startup_path}"
+    else:
+        default_text = "Default database/set : (none)"
+    draw_status_line(buffer, theme, clip_text(default_text, SCREEN_WIDTH - 2))
+    draw_help_line(buffer, theme, SIGN_ON_HELP)
+    regions = draw_menu_line(buffer, theme, SIGN_ON_KEYS)
     return View(buffer, regions)
 
 

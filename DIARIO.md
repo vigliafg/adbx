@@ -888,10 +888,141 @@ Formato:
 
 ---
 
+### 2026-11-24 — Banner di apertura e ultimo database (come l'originale)
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: allineare l'avvio all'originale, che mostra una **schermata di
+  apertura** con l'ultimo database/set usato e aspetta `F10` (o pochi
+  secondi) prima di entrare nel main menu; `F9` apre il Database Directory.
+- Fonti: Reference Manual cap. 1 («Select FIO (Continue) to proceed to the
+  Alpha Four main menu using the most recently used database or set… Choose
+  F9 (Change Database/Set)… The filename of the last used database or set is
+  stored in the A4.DFL file»), Mastering Alpha Four cap. 4 (sign-on screen,
+  F10/F9, auto-continue dopo pochi secondi), Tutorial lezione 1.
+- File toccati: `src/adbx/shell/screens.py` (nuova `sign_on` con logo,
+  database predefinito, `F10Continue`/`F9Change Database/Set`),
+  `src/adbx/shell/controller.py` (base iniziale `banner`, `banner_continue`,
+  `_handle_banner`, `_show_directory`, `last_database` letto da
+  `config.json` e salvato all'apertura), `src/adbx/app/window.py`
+  (`QTimer` di 4 s), `.gitignore` (`config.json`), `tests/support.py`,
+  test aggiornati in `tests/test_shell_directory.py`, `tests/test_lesson.py`,
+  `tests/test_records.py`, `tests/test_tutorial_25.py`; documentazione in
+  `README.md`, `docs/manuale-utente.md`, `docs/spec/02-shell.md`,
+  `docs/spec/14-config-stampa.md`, `docs/CHANGELOG.md`.
+- Scelte:
+  - **`last_database`** in `config.json` è l'equivalente di `A4.DFL`; viene
+    scritto appena si apre un database o un set, non solo al Quit.
+  - Senza ultimo database (primo avvio o file sparito) `F10`/l'attesa
+    portano al **Database Directory**, come l'originale in una cartella
+    senza database.
+  - `ESC` sul banner equivale a `F9`; `ESC` dal Directory torna al menu,
+    anche senza database aperto.
+  - `--open FILE` salta il banner e apre direttamente il file.
+  - La GUI prosegue da sola dopo 4 secondi, come l'originale; il controller
+    resta Qt-free e nei test il timeout si simula con `banner_continue()`.
+- Test: **495 passed**, nessuno saltato; ruff pulito.
+
+---
+
+### 2026-11-24 — Enter records: F10 esce, ENTER/CTRL-ENTER proseguono
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: chiarire e allineare all'originale il salvataggio in Enter mode.
+  Nel Reference Manual: `F10 (Continue)` salva e torna alla modalità
+  precedente (View o main menu), mentre `ENTER` salva e apre un nuovo record;
+  il Mastering aggiunge `CTRL-ENTER next record` da qualunque campo. Il
+  comportamento di F10 segnalato non era quindi un difetto: F10 non deve
+  continuare col record successivo.
+- File toccati: `src/adbx/shell/records.py` (`CTRL-ENTER` salva e apre il
+  record successivo; `menu_entries` mostra `ENTER Next record` sull'ultimo
+  campo; `E` da View/Browse entra in Enter e `F10`/`ESC` tornano alla
+  modalità di partenza; `F10` su un nuovo record vuoto esce senza crearlo),
+  `src/adbx/shell/record_screens.py` (riga di aiuto della modalità Enter),
+  test in `tests/test_records.py`; documentazione in
+  `docs/spec/04-dati-immissione.md`, `docs/manuale-utente.md`,
+  `docs/CHANGELOG.md`.
+- Scelte:
+  - `F10` resta **Save/Continue**: salva ed esce, come nell'originale.
+  - `ENTER` sull'ultimo campo e `CTRL-ENTER` ovunque salvano e aprono il
+    record successivo; `CTRL-ENTER` è la scorciatoia per i record con campi
+    lasciati vuoti.
+  - La voce `ENTER Next record` compare solo sull'ultimo campo, come il menu
+    che l'originale mostra a record completato.
+  - Nella form Enter le frecce spostano tra i **campi**; i record già inseriti
+    si rivedono in View. Da View `E` entra in Enter mantenendo View come
+    ritorno, così `F10` torna al record appena salvato e le frecce scorrono
+    gli altri. Enter scelto dal main menu continua a tornare al main menu.
+  - In Enter `PGUP`/`PGDN` non spostano più l'indice di record in modo
+    invisibile: lo scorrimento dei record resta di Change/View/Browse.
+- Test: **500 passed**, nessuno saltato; ruff pulito.
+
+---
+
+### 2026-11-24 — Zoom: CTRL-+ funzionante su finestre già piene
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: `CTRL-+` non faceva nulla mentre `CTRL--` funzionava. Il corpo
+  automatico era già il massimo che entrava nella finestra: `best <= ceiling`,
+  quindi `base = best` non lasciava alcun margine per ingrandire. Sul display
+  dell'utente (4096×2160 a scala 3 → area logica 1365×720) la finestra
+  1256×662 è già al limite, quindi `CTRL-+` era sempre limitato.
+- File toccati: `src/adbx/config/display.py` (`base_pixel_size`,
+  `zoom_pixel_size`), `src/adbx/app/window.py` (corpo di riferimento al 100%,
+  zoom esplicito, crescita della finestra su `CTRL-+`),
+  `src/adbx/render/qt_renderer.py` (`best_pixel_size`, `measure`), test in
+  `tests/test_config.py`; documentazione in `docs/spec/01-scalabilita.md`,
+  `README.md`, `docs/manuale-utente.md`, `docs/CHANGELOG.md`.
+- Scelte:
+  - Il 100% resta il corpo **massimo che entra** nella finestra (o il tetto di
+    leggibilità): nessun testo più piccolo del necessario.
+  - Quando la finestra limita, `CTRL-+` allarga la finestra fino all'area
+    disponibile dello schermo per contenere il corpo maggiore; non allarga
+    oltre il massimo ottenibile sullo schermo. `CTRL--` non rimpicciolisce la
+    finestra.
+  - Lo zoom salvato (es. 110%) viene applicato anche all'avvio, con la
+    finestra dimensionata di conseguenza. `CTRL-0` torna al 100%.
+  - La griglia continua a non essere mai tagliata; `(max)` appare solo quando
+    nemmeno la finestra massima basta.
+- Verifica: test sintetico su Xvfb 4096×2160 con scala 3 (stesse condizioni
+  del display): 100% = 40 px dispositivo (corpo massimo nella finestra
+  iniziale), `CTRL-+` porta la finestra a 720 px di altezza e il corpo a
+  43 px, il massimo sullo schermo; oltre resta `(max)`.
+- Nota: con 43 righe su un'area logica di 720 px il corpo massimo è ~14 px
+  logici. Per testi molto più grandi servono meno righe (es. 80×25) o una
+  scala desktop inferiore al 300%.
+- Test: **501 passed**, nessuno saltato; ruff pulito.
+
+---
+
+### 2026-11-24 — Ambiente DOS di riferimento: TTF 58 memorizzato
+- Stato: completata
+- Branch/commit: `main`.
+- Obiettivo: memorizzare la configurazione dell'originale che dà misura e
+  definizione migliori, senza doverla ripetere a ogni avvio.
+- Scelte:
+  - `tools/run_alpha4_dosbox.sh` parte di default in **output TTF** con
+    `ptsize=58`: su schermo 4096×2160 la finestra misurata è **2320×1450**
+    (circa il 20% in meno della configurazione `winperc=60`, 2880×1800).
+  - Opzioni: `--ttf`/`--ttf=NN` per la dimensione in percentuale,
+    `--ttf-size=NN` per il corpo in punti, `--no-ttf` per tornare al
+    framebuffer bitmap/OpenGL.
+  - La finestra TTF non è ridimensionabile (limite di DOSBox-X): la
+    dimensione deriva dal corpo del font; `F12-Up`/`F12-Down` la regolano.
+  - Documentato in `README.md` e `docs/spec/03-ambiente-dos-riferimento.md`.
+- Verifica: default → `TTF activated`, finestra 2320×1450; `--no-ttf` →
+  output bitmap 720×400, TTF non attivato.
+
+---
+
 ## RIPRESA — checkpoint zoom della finestra
 
-- Ultimo commit: zoom utente, tetto di leggibilità e ripristino della GUI.
-- Test: 490 verdi, nessuno saltato; ruff pulito; smoke e version verdi.
+- Ultimo commit: zoom funzionante su ogni schermo, banner di apertura con
+  ultimo database, View↔Enter e ENTER/CTRL-ENTER in Enter records, zoom
+  utente e ripristino della GUI.
+- Ambiente DOS di riferimento: `tools/run_alpha4_dosbox.sh`, default TTF
+  `ptsize=58` (finestra 2320×1450); `F12` regola il corpo, `--no-ttf` per il
+  bitmap.
+- Test: 501 verdi, nessuno saltato; ruff pulito; smoke e version verdi.
 - Specifiche: tutte in `docs/spec/`; manuale `docs/manuale-utente.md`.
 - E2E: `docs/e2e/` con 8 schermate adbx e 2 catture dell'originale.
 - Controllo visivo: 1452×903 e 2400×1500 a 100/70/150/200%, finestra reale

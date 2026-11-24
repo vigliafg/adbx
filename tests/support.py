@@ -105,6 +105,23 @@ def make_movies(tmp_path):
     return tmp_path / "AVMOVIES.DBF", database
 
 
+def open_directory(controller):
+    """Porta il controller al Database Directory.
+
+    Dal banner si usa F9 (Change Database/Set), come l'originale; dal main
+    menu si usa Choose database/set → Open a database.
+    """
+    from adbx.screen.keys import Key
+
+    if controller.base == "banner":
+        controller.handle(Key("F9"))
+    else:
+        controller.handle(Key("C"))
+        controller.handle(Key("ENTER"))
+    assert controller.base == "directory"
+    return controller
+
+
 def make_patrons(tmp_path):
     """Database AVPATRON ridotto per search/sort e range."""
     from adbx.data.fields import Field

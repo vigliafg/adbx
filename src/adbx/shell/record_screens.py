@@ -139,6 +139,9 @@ def _form_hint(session: RecordSession) -> str:
     if session.mode == "browse":
         return ("F Find   L Locate   I Index   R Range   F7 show deleted   "
                 "F10 continue")
+    if session.mode == "enter":
+        return ("TAB next field   ENTER next record   F10 save and exit   "
+                "ESC cancel   ALT-M memo")
     return "TAB next field   F10 save   ESC cancel   ALT-M memo   ALT-F5 copy   ALT-F6 paste"
 
 

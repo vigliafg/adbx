@@ -2,6 +2,25 @@
 
 ## Non pubblicato
 
+- Zoom: `CTRL-+` ora ingrandisce davvero anche quando la finestra era già
+  piena. Al 100% il corpo è il massimo che entra; `CTRL-+` allarga la finestra
+  fino allo schermo per contenere il corpo maggiore, `CTRL--` torna indietro
+  e `F11` usa tutto lo schermo. `(max)` appare solo oltre il massimo
+  effettivo, senza mai tagliare la griglia.
+- Enter records: `CTRL-ENTER` salva il record corrente e apre subito il
+  successivo da qualunque campo; sull'ultimo campo la command line mostra
+  `ENTER Next record`. `F10` resta Continue/Save ed esce dalla modalità,
+  come nell'originale.
+- Record: da View/Browse `E` entra in Enter; `F10`/`ESC` tornano alla
+  modalità precedente (View/Browse sul record salvato o corrente). Nella
+  form Enter le frecce spostano tra i campi, non tra i record; `F10` su un
+  nuovo record vuoto esce senza crearlo.
+- Avvio: schermata di apertura (banner) con l'**ultimo database/set** sulla
+  riga di stato; `F10` (o una breve attesa) carica il database e mostra il
+  main menu, `F9` apre il Database Directory. L'ultimo database è salvato in
+  `config.json` (`last_database`), come l'`A4.DFL` originale. Allineato al
+  Reference Manual («Select FIO (Continue) … using the most recently used
+  database or set»).
 - Finestra: tetto di leggibilità di 24 px logici con margini su schermi
   grandi, zoom `CTRL-+` / `CTRL--` / `CTRL-0` (50–200%) salvato in
   `config.json` (`screen_zoom`) e modificabile da Default settings.

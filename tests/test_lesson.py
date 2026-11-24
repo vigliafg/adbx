@@ -1,12 +1,13 @@
 """Accettazione O1: lezioni 1 e 3 del Tutorial.
 
-La sequenza di tasti è quella del manuale: si parte dal Database Directory,
-si apre AVMOVIES, si percorre il menu, si chiede aiuto su ogni comando, si
-cambia database con Choose database/set, si vedono struttura e stato, si esce
-con Quit.
+La sequenza di tasti è quella del manuale: si parte dal banner (sign-on
+screen) con il database predefinito, F10 prosegue al Database Directory (o
+al main menu se c'è un ultimo database), si apre AVMOVIES, si percorre il
+menu, si chiede aiuto su ogni comando, si cambia database con Choose
+database/set, si vedono struttura e stato, si esce con Quit.
 """
 
-from support import make_tutorial_set
+from support import make_tutorial_set, open_directory
 
 from adbx.cell.buffer import HELP_ROW
 from adbx.screen.keys import Key
@@ -23,13 +24,22 @@ def test_lesson_1_startup_and_main_menu(tmp_path):
     data = make_tutorial_set(tmp_path / "TUTOR")
     controller = ShellController(data)
 
-    # 1. Il Database Directory mostra path, default e i file del tutorial.
+    # 1. All'avvio si vede il banner con il database predefinito (nessuno).
+    text = _text(controller)
+    assert controller.base == "banner"
+    assert "A L P H A   F O U R" in text
+    assert "Default database/set" in text
+    assert "(none)" in text
+
+    # 2. F10 prosegue: senza database predefinito si apre il Directory.
+    controller.handle(Key("F10"))
+    assert controller.base == "directory"
     text = _text(controller)
     assert "D A T A B A S E   D I R E C T O R Y" in text
     assert str(data / "*") in text
     assert "ALPHAVID" in text
 
-    # 2. Seleziona AVMOVIES e premi ENTER.
+    # 3. Seleziona AVMOVIES e premi ENTER.
     controller.handle(Key("DOWN"))
     assert controller._selected().name == "AVMOVIES"
     controller.handle(Key("ENTER"))
@@ -38,11 +48,11 @@ def test_lesson_1_startup_and_main_menu(tmp_path):
     assert "Records in database" in _text(controller)
     assert " 50" in _text(controller)
 
-    # 3. Il main menu enumera i dodici comandi e la riga di aiuto.
+    # 4. Il main menu enumera i dodici comandi e la riga di aiuto.
     assert "Alpha Four Main Menu" in _text(controller)
     assert "View, change, enter or delete records" in controller.view().buffer.text_of(HELP_ROW)
 
-    # 4. Help contestuale su ogni comando.
+    # 5. Help contestuale su ogni comando.
     from adbx.shell.screens import COMMANDS
 
     for index, (_label, topic_id) in enumerate(COMMANDS):
@@ -54,7 +64,7 @@ def test_lesson_1_startup_and_main_menu(tmp_path):
         controller.handle(Key("ESC"))
         assert controller.overlay is None
 
-    # 5. Quit esce.
+    # 6. Quit esce.
     controller.menu_index = 0
     controller.handle(Key("Q"))
     assert controller.quit
@@ -62,7 +72,7 @@ def test_lesson_1_startup_and_main_menu(tmp_path):
 
 def test_lesson_3_choose_database_and_info(tmp_path):
     data = make_tutorial_set(tmp_path / "TUTOR")
-    controller = ShellController(data)
+    controller = open_directory(ShellController(data))
     controller.handle(Key("DOWN"))
     controller.handle(Key("ENTER"))
     assert controller.state.current.name == "AVMOVIES"

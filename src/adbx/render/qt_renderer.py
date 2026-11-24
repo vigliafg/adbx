@@ -24,6 +24,7 @@ class CellRenderer:
         self.palette = palette
         self.dpr = 1.0
         self.base_pixel_size = MIN_PIXEL_SIZE
+        self.best_pixel_size = MIN_PIXEL_SIZE
         self.zoom_limited = False
         self._pixel_size_dev = 0
         self._atlases: dict[tuple[int, bool], QImage] = {}
@@ -83,11 +84,20 @@ class CellRenderer:
             base = max(MIN_PIXEL_SIZE, min(best, round(ceiling)))
         requested = round(base * max(0.1, float(zoom)))
         target = max(MIN_PIXEL_SIZE, min(best, requested))
+        self.best_pixel_size = best
         self.base_pixel_size = base
         self.zoom_limited = requested > best
         self._prepare(target)
         self.cell_w = self.advance / self.dpr
         self.cell_h = self.line_height / self.dpr
+
+    def measure(self, pixel_size: int) -> tuple[float, float]:
+        """Cella (larghezza, altezza) per un corpo, senza cambiare lo stato."""
+        saved = self._pixel_size_dev
+        self._prepare(pixel_size)
+        result = (self.advance / self.dpr, self.line_height / self.dpr)
+        self._prepare(saved)
+        return result
 
     def use_natural_size(self, pixel_size: int, dpr: float = 1.0) -> None:
         """Cella = metriche del font: usata per screenshot canonici."""

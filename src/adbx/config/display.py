@@ -13,6 +13,16 @@ ZOOM_MAX = 200
 ZOOM_STEP = 10
 
 
+def base_pixel_size(best: int, ceiling: int) -> int:
+    """Corpo al 100%: il massimo che entra, entro il tetto di leggibilità."""
+    return max(1, min(int(best), int(ceiling)))
+
+
+def zoom_pixel_size(base: int, zoom: int) -> int:
+    """Corpo per un livello di zoom, a partire dal corpo al 100%."""
+    return max(1, round(int(base) * int(zoom) / 100))
+
+
 def clamp_zoom(value: object) -> int:
     """Riporta uno zoom percentuale nell'intervallo ammesso."""
     try:
@@ -28,5 +38,7 @@ __all__ = [
     "ZOOM_MAX",
     "ZOOM_MIN",
     "ZOOM_STEP",
+    "base_pixel_size",
     "clamp_zoom",
+    "zoom_pixel_size",
 ]

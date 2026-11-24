@@ -38,13 +38,13 @@ MODE_TITLES = {
 
 MODE_KEYS = {
     "view": [("F1", "Help"), ("F", "Find"), ("L", "Locate"), ("I", "Index"),
-             ("R", "Range"), ("S", "Replace"), ("F10", "Continue"),
-             ("F7", "Show deleted"), ("T", "Tools"), ("Alt-M", "Memo"),
-             ("Alt-D", "Delete"), ("Alt-U", "Undelete")],
+             ("R", "Range"), ("S", "Replace"), ("E", "Enter"),
+             ("F10", "Continue"), ("F7", "Show deleted"), ("T", "Tools"),
+             ("Alt-M", "Memo"), ("Alt-D", "Delete"), ("Alt-U", "Undelete")],
     "browse": [("F1", "Help"), ("F", "Find"), ("L", "Locate"), ("I", "Index"),
-               ("R", "Range"), ("F10", "Continue"), ("F7", "Show deleted"),
-               ("T", "Tools"), ("Alt-M", "Memo"), ("Alt-D", "Delete"),
-               ("Alt-U", "Undelete")],
+               ("R", "Range"), ("E", "Enter"), ("F10", "Continue"),
+               ("F7", "Show deleted"), ("T", "Tools"), ("Alt-M", "Memo"),
+               ("Alt-D", "Delete"), ("Alt-U", "Undelete")],
     "enter": [("F1", "Help"), ("F3", "Choices"), ("F10", "Save"),
               ("ESC", "Cancel"), ("Alt-M", "Memo"), ("Alt-F5", "Copy"),
               ("Alt-F6", "Paste")],
@@ -240,6 +240,7 @@ class RecordSession:
     form_page: int = 0
     event_hook: object | None = None
     menu_items: list | None = None
+    return_mode: str | None = None
     _seqs: list[int] = field(init=False, default_factory=list)
     _browse_rows: list[tuple[int, bool, dict[str, str]]] | None = field(
         init=False, default=None)
@@ -292,7 +293,14 @@ class RecordSession:
     def menu_entries(self) -> list[tuple[str, str]]:
         if self.menu_items:
             return [(item.key, item.label) for item in self.menu_items]
-        return MODE_KEYS[self.mode]
+        entries = list(MODE_KEYS[self.mode])
+        if self.mode == "enter" and self._on_last_field():
+            entries.insert(2, ("ENTER", "Next record"))
+        return entries
+
+    def _on_last_field(self) -> bool:
+        navigation = self._navigation_fields()
+        return bool(navigation) and self.field_index >= len(navigation) - 1
 
     @property
     def page_rows(self) -> int:
@@ -498,6 +506,36 @@ class RecordSession:
         self.field_index = self._first_usable(0, 1)
         self._load_field()
         self._maybe_open_lookup()
+
+    def _switch_to_enter(self) -> None:
+        """Da View/Browse: entra in Enter mantenendo la modalità di ritorno."""
+        if self.mode == "enter":
+            return
+        self.return_mode = self.mode
+        self.mode = "enter"
+        self.help_topic = "records"
+        self._start_new()
+        self._emit("REC_ENTER")
+
+    def _return_from_enter(self) -> None:
+        """Chiude Enter e torna alla modalità da cui si era partiti."""
+        target = self.return_mode or "view"
+        self.return_mode = None
+        self.mode = target
+        self.help_topic = "browse" if target == "browse" else "records"
+        self.seq = None
+        self.draft = {}
+        self.field_index = 0
+        if target == "change":
+            self._load_record()
+
+    def _blank_new_record(self) -> bool:
+        if self.mode != "enter" or self.seq is not None:
+            return False
+        if self.dirty or self.edit_text.strip():
+            return False
+        return not any((self.draft.get(field.name) or "").strip()
+                       for field in self.database.fields)
 
     def _navigation_fields(self) -> list[Field]:
         if self.form is None:
@@ -1356,13 +1394,24 @@ class RecordSession:
         if name == "F10":
             if self.mode == "view" or self.mode == "browse":
                 self.close = True
+            elif self._blank_new_record():
+                if self.return_mode is not None:
+                    self._return_from_enter()
+                else:
+                    self.close = True
             elif self.save():
-                self.close = True
+                if self.return_mode is not None:
+                    self._return_from_enter()
+                else:
+                    self.close = True
             return
         if name == "ESC":
             if self.mode in ("enter", "change") and self.dirty:
                 self._discard()
-            self.close = True
+            if self.mode == "enter" and self.return_mode is not None:
+                self._return_from_enter()
+            else:
+                self.close = True
             return
         if name == "F7":
             self._toggle_deleted()
@@ -1403,6 +1452,8 @@ class RecordSession:
             self._move_record(-10)
         elif name == "PGDN":
             self._move_record(10)
+        elif name == "E":
+            self._switch_to_enter()
         elif name == "TAB":
             self._move_record(10 if not key.shift else -10)
         elif name == "HOME":
@@ -1430,6 +1481,8 @@ class RecordSession:
             self._move_record(-self.page_rows)
         elif name == "PGDN":
             self._move_record(self.page_rows)
+        elif name == "E":
+            self._switch_to_enter()
         elif name == "TAB":
             self._move_record(10 if not key.shift else -10)
         elif name == "HOME":
@@ -1487,6 +1540,9 @@ class RecordSession:
             self.status = "Insert on." if self.insert_mode else "Overwrite on."
         elif name == "F3":
             self._open_lookup()
+        elif name == "ENTER" and self.mode == "enter" and key.ctrl:
+            if self.save():
+                self._start_new()
         elif name == "ENTER":
             field = self._field()
             navigation = self._navigation_fields()
@@ -1497,9 +1553,11 @@ class RecordSession:
             else:
                 self._move_field(1, wrap=True)
         elif name == "PGUP":
-            self._move_record(-1)
+            if self.mode == "change":
+                self._move_record(-1)
         elif name == "PGDN":
-            self._move_record(1)
+            if self.mode == "change":
+                self._move_record(1)
         elif name == "SPACE" or len(name) == 1 or character(key):
             if name in ("SPACE",) or character(key):
                 self._typed(key)

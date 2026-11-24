@@ -75,6 +75,10 @@ def make_library(tmp_path):
 def test_lesson_01_getting_started(tmp_path):
     _workspace, patrons, _movies, _sales = make_library(tmp_path)
     controller = ShellController(tmp_path)
+    lines = "\n".join(controller.view().buffer.to_lines())
+    assert controller.base == "banner"
+    assert "A L P H A   F O U R" in lines
+    controller.handle(Key("F10"))
     assert "D A T A B A S E   D I R E C T O R Y" in \
         "\n".join(controller.view().buffer.to_lines())
     controller.input_text = str(patrons.source)

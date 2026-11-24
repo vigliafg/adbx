@@ -7,11 +7,22 @@ esistono e cosa è volutamente rimandato alle ondate successive.
 
 - La shell parte nella **cartella corrente** (o in quella indicata con
   `--data DIR`, o dalla variabile `ADBX_DATA`).
-- Se non c'è un database corrente, si apre il **Database Directory**.
-- Con `--open FILE` (database `.DBF`) si apre direttamente il file e si arriva
-  al main menu.
-- Non c'è banner iniziale: il manuale lo descrive, ma non serve alla
-  navigazione e sarebbe un ostacolo a ogni avvio. Deviazione dichiarata.
+- All'avvio compare la **schermata di apertura (banner)** con l'ultimo
+  database/set usato sulla riga di stato, come l'originale.
+- `F10` (Continue) — o l'attesa di quattro secondi — carica l'ultimo
+  database/set e mostra il **main menu**. `F9` (Change Database/Set) o `ESC`
+  apre subito il **Database Directory**.
+- Se non c'è un ultimo database (primo avvio, oppure file sparito),
+  `F10`/l'attesa portano al **Database Directory**.
+- Il main menu senza database mostra `(none)`; i comandi che ne hanno bisogno
+  invitano a sceglierne uno. Il Database Directory resta raggiungibile anche
+  da `Choose database/set` → `Open a database`.
+- L'ultimo database/set aperto è salvato in `config.json`
+  (`last_database`), l'equivalente di `A4.DFL`.
+- Con `--open FILE` (database `.DBF`) si salta il banner e si arriva
+  direttamente al main menu.
+- Non c'è un banner grafico disegnabile: quello di adbx è una schermata
+  funzionale con logo, database predefinito e tasti. Deviazione dichiarata.
 
 Il controller `ShellController` non conosce Qt: riceve `Key` e coordinate di
 cella, produce un `View` (buffer + zone cliccabili). La stessa `handle(Key)`
@@ -32,6 +43,8 @@ Enter name of the database/set : /percorso/corrente/AVMOVIES.DBF_
 F3Import   F4History on   F6Refresh   F5Create Db   F8Detail on   F9DOS
 ```
 
+- **Accesso**: dal banner con `F9` (Change Database/Set) oppure dal main menu
+  con `Choose database/set` → `Open a database`. `ESC` torna al main menu.
 - **Elenco**: `<Parent>` (se esiste), sottodirectory, poi file `.SET`/`.DBF`
   in ordine alfabetico. Il nome è il basename; l'estensione va nella colonna
   Type; la data è quella del file (come il `DIR` di DOS).
@@ -115,7 +128,8 @@ F1Help  Alt-F1Quick record  Alt-F2Quick play  Alt-F3Script menu  Alt-F9DOS acces
 
 ## 8. Deviazioni e limiti dichiarati
 
-- Nessun banner iniziale.
+- Il banner iniziale è funzionale (logo, database predefinito, tasti), non
+  riproduce la grafica dell'originale.
 - `F9 DOS` non esiste: adbx è una finestra moderna.
 - Set, import, creazione database e desktop sono riconosciuti ma rimandati:
   i messaggi dicono l'ondata.
@@ -124,8 +138,8 @@ F1Help  Alt-F1Quick record  Alt-F2Quick play  Alt-F3Script menu  Alt-F9DOS acces
 
 ## 9. Accettazione
 
-- Lezione 1: avvio, Database Directory, AVMOVIES, main menu, help su ogni
-  comando, Quit. Coperta da `tests/test_lesson.py`.
+- Lezione 1: banner con database predefinito, Database Directory, AVMOVIES,
+  main menu, help su ogni comando, Quit. Coperta da `tests/test_lesson.py`.
 - Lezione 3: Choose database/set → Open a database, cambio database, F2
   struttura (due pagine per AVSALES), F3 status. Coperta dallo stesso file.
 - Help contestuale su ogni comando e directory navigabile da tastiera e mouse:

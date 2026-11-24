@@ -147,21 +147,24 @@ python -m adbx --smoke       # griglia 132x43 e digest
 ## Avvio rapido
 
 ```bash
-./start.sh                              # Database Directory
-./start.sh --data ~/dati                # cartella dati
+./start.sh                              # banner, poi main menu
+./start.sh --data ~/dati                # cartella dati, banner
 ./start.sh --open ~/dati/AVMOVIES.DBF   # apre un database
 ./start.sh --open ~/dati/ALPHAVID.SET   # apre un set
 ./start.sh --app AVSYSTEM               # avvia un'applicazione
 ./start.sh --smoke --dump               # dump completo della griglia
 ```
 
-La sessione parte dal **Database Directory**:
+All'avvio compare il **banner** con l'ultimo database/set usato in basso:
 
-1. scegliere un `.DBF` o `.SET` con le frecce;
-2. filtrare con `*` e `?`;
-3. aprire con `ENTER`;
-4. usare le hot key del main menu o le frecce + `ENTER`;
+1. `F10` (Continue) o una breve attesa caricano l'ultimo database/set e
+   mostrano il **main menu**;
+2. `F9` (Change Database/Set) apre il **Database Directory**;
+3. scegliere un `.DBF` o `.SET` con le frecce e filtrare con `*` e `?`;
+4. aprire con `ENTER` (si torna al main menu con il database corrente);
 5. `Quit` chiude la sessione, `ALT-F10` torna al menu.
+
+Senza un database precedente, `F10` porta al Database Directory.
 
 ## Interfaccia e tastiera
 
@@ -192,10 +195,12 @@ maiuscola è la hot key (`V`, `P`, `S`, `I`, `G`, `C`, `D`, `L`, `A`, `U`,
 La griglia resta **132×43** a ogni dimensione della finestra: cambia il corpo
 del font, non il layout. Il corpo automatico si ferma a **24 px logici** per
 lasciare margini leggibili sugli schermi grandi; `CTRL-+` / `CTRL--` spostano
-lo zoom a passi del 10% (50–200%) e `CTRL-0` lo riporta al 100%. Lo zoom non
-taglia mai la griglia: oltre il massimo consentito dalla finestra il titolo
-mostra `(max)`. Il livello è salvato in `config.json` (`screen_zoom`) e si può
-modificare anche da `Other → Default settings`.
+lo zoom a passi del 10% (50–200%) e `CTRL-0` lo riporta al 100%. Al 100% il
+testo occupa già tutto lo spazio utile; `CTRL-+` ingrandisce allargando la
+finestra fino allo schermo, e `F11` porta la griglia alla dimensione massima.
+Lo zoom non taglia mai la griglia: oltre il massimo consentito dalla finestra
+il titolo mostra `(max)`. Il livello è salvato in `config.json`
+(`screen_zoom`) e si può modificare anche da `Other → Default settings`.
 
 ## Dati e workspace
 
@@ -566,8 +571,14 @@ L'originale DOS si può avviare per confronto:
 
 ```bash
 sudo apt-get install dosbox-x
-tools/run_alpha4_dosbox.sh
+tools/run_alpha4_dosbox.sh            # TTF, corpo 58 (2320×1450)
 ```
+
+Il runner parte di default in **output TTF** con `ptsize=58`: caratteri
+vettoriali definiti e finestra 2320×1450 misurata su schermo 4096×2160.
+`F12-Up` / `F12-Down` cambiano al volo il corpo del font. Alternative:
+`--ttf=NN` (dimensione finestra in percentuale), `--ttf-size=NN` (corpo in
+punti), `--no-ttf` (output bitmap/OpenGL).
 
 Verificato con DOSBox-X 2026.01.02, `svga_s3`, 16 MB. I file del programma
 originale non sono inclusi nel repository.

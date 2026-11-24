@@ -9,13 +9,21 @@ from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget
 
 from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
-from ..config.display import COMFORT_FONT_PX, ZOOM_DEFAULT, ZOOM_STEP, clamp_zoom
-from ..render.qt_renderer import CellRenderer
+from ..config.display import (
+    COMFORT_FONT_PX,
+    ZOOM_DEFAULT,
+    ZOOM_STEP,
+    base_pixel_size,
+    clamp_zoom,
+    zoom_pixel_size,
+)
+from ..render.qt_renderer import MAX_PIXEL_SIZE, MIN_PIXEL_SIZE, CellRenderer
 from ..screen.qt_input import key_from_qt
 from ..shell.controller import ShellController
 
 MIN_WIDTH = 660
 MIN_HEIGHT = 420
+BANNER_DELAY_MS = 4000
 
 
 class ScreenWidget(QWidget):
@@ -27,6 +35,8 @@ class ScreenWidget(QWidget):
         self.renderer = CellRenderer(pixel_size=16)
         self.blink_on = True
         self._applied_zoom = clamp_zoom(controller.screen_zoom)
+        self._zoom_base: int | None = None
+        self._initial_zoom_done = False
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setMinimumSize(MIN_WIDTH, MIN_HEIGHT)
         self._timer = QTimer(self)
@@ -35,18 +45,69 @@ class ScreenWidget(QWidget):
 
     # -- scalabilita' ----------------------------------------------------
     def refit(self) -> None:
-        """Sceglie il corpo del font che riempie la finestra, con tetto e zoom."""
+        """Corpo di riferimento al 100% e zoom esplicito sopra quel corpo."""
         dpr = self.devicePixelRatioF()
         zoom = self._zoom_percent()
         self.renderer.fit(
             self.width(), self.height(), SCREEN_WIDTH, SCREEN_HEIGHT, dpr,
-            ceiling=COMFORT_FONT_PX * dpr, zoom=zoom / 100)
+            ceiling=COMFORT_FONT_PX * dpr, zoom=1.0)
+        if self._zoom_base is None or zoom == ZOOM_DEFAULT:
+            self._zoom_base = base_pixel_size(
+                self.renderer.best_pixel_size,
+                round(COMFORT_FONT_PX * dpr))
+        target = max(MIN_PIXEL_SIZE,
+                     min(MAX_PIXEL_SIZE,
+                         zoom_pixel_size(self._zoom_base, zoom)))
+        best = self.renderer.best_pixel_size
+        limited = target > best
+        if limited:
+            target = best
+        if target != self.renderer.pixel_size:
+            self.renderer.use_natural_size(target, dpr)
+            self.renderer.base_pixel_size = self._zoom_base
+        self.renderer.zoom_limited = limited
         self._applied_zoom = zoom
         self._update_title()
         self.update()
 
     def _zoom_percent(self) -> int:
         return clamp_zoom(self.controller.screen_zoom)
+
+    def _zoom_target_pixel_size(self, zoom: int) -> int:
+        base = self._zoom_base or self.renderer.pixel_size
+        return max(MIN_PIXEL_SIZE,
+                   min(MAX_PIXEL_SIZE, zoom_pixel_size(base, zoom)))
+
+    def _grow_window_for(self, pixel_size: int) -> None:
+        """Allarga la finestra quanto serve per un corpo più grande."""
+        window = self.window()
+        current = self.renderer.pixel_size
+        dpr = self.devicePixelRatioF()
+        screen = QApplication.primaryScreen()
+        available = screen.availableGeometry() if screen is not None else None
+        if available is not None:
+            # Corpo massimo ottenibile sullo schermo: oltre non ha senso
+            # continuare ad allargare la finestra.
+            self.renderer.fit(
+                available.width(), available.height(), SCREEN_WIDTH,
+                SCREEN_HEIGHT, dpr, ceiling=COMFORT_FONT_PX * dpr, zoom=1.0)
+            best_screen = self.renderer.best_pixel_size
+            if current >= best_screen:
+                return
+            pixel_size = min(pixel_size, best_screen)
+        cell_w, cell_h = self.renderer.measure(pixel_size)
+        chrome_w = max(0, window.width() - self.width())
+        chrome_h = max(0, window.height() - self.height())
+        width = round(cell_w * SCREEN_WIDTH) + chrome_w + 4
+        height = round(cell_h * SCREEN_HEIGHT) + chrome_h + 4
+        if available is not None:
+            width = min(width, available.width())
+            height = min(height, available.height())
+        width = max(MIN_WIDTH, width)
+        height = max(MIN_HEIGHT, height)
+        if width > window.width() or height > window.height():
+            window.resize(max(window.width(), width),
+                          max(window.height(), height))
 
     def _update_title(self) -> None:
         zoom = self._zoom_percent()
@@ -62,11 +123,19 @@ class ScreenWidget(QWidget):
         target = ZOOM_DEFAULT if delta == 0 else clamp_zoom(current + delta)
         if target != current:
             self.controller.set_screen_zoom(target)
+        if target > current:
+            self._grow_window_for(self._zoom_target_pixel_size(target))
         self.refit()
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
         self.refit()
+        if not self._initial_zoom_done:
+            self._initial_zoom_done = True
+            zoom = self._zoom_percent()
+            if zoom != ZOOM_DEFAULT:
+                self._grow_window_for(self._zoom_target_pixel_size(zoom))
+                self.refit()
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
@@ -148,6 +217,15 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(ScreenWidget(self.controller, self))
         self.statusBar().hide()
         self._size_to_screen()
+        if self.controller.base == "banner":
+            QTimer.singleShot(BANNER_DELAY_MS, self._banner_continue)
+
+    def _banner_continue(self) -> None:
+        """Dopo la pausa il banner prosegue, come l'originale."""
+        if self.controller.base != "banner":
+            return
+        self.controller.banner_continue()
+        self.centralWidget().update()
 
     def _size_to_screen(self) -> None:
         screen = QApplication.primaryScreen()
