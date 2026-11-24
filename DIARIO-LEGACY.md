@@ -65,7 +65,8 @@ Piano di riferimento: `PLAN-LEGACY.md`.
 
 ### Verifica di questo step
 
-- `pytest -q`: **461 test verdi** (era 451).
+- `pytest -q`: **511 test verdi** (501 funzioni al baseline, ora 459
+  definizioni con parametrizzazioni che portano il totale a 511).
 - `./start.sh --smoke`: `adbx 1.0.0: griglia 80x25, digest 9f8b632350151a12`.
 - Cattura UI: 55 PNG 880×525 in `/tmp/opencode/render-legacy`, controllo
   visivo di main menu, form designer, formatting, script editor, dialog
