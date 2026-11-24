@@ -39,7 +39,7 @@ from .widgets import (
 )
 
 CONTENT_TOP = 5
-EDITOR_KEYS = [("F1", "Help"), ("F2", "Commands"), ("F3", "Learn"),
+EDITOR_KEYS = [("F1", "Help"), ("F2", "Cmds"), ("F3", "Learn"),
                ("F4", "Append"), ("F5", "Screen test"), ("F6", "Mark area"),
                ("F10", "Save")]
 DESIGN_KEYS = [("F1", "Help"), ("F2", "Prompt"), ("F3", "Button"),

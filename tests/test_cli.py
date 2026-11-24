@@ -4,15 +4,25 @@ from adbx.__main__ import main
 def test_smoke_runs_headless(capsys):
     assert main(["--smoke"]) == 0
     out = capsys.readouterr().out
-    assert "griglia 132x43" in out
+    assert "griglia 80x25" in out
     assert "digest" in out
 
 
 def test_smoke_dump(capsys):
     assert main(["--smoke", "--dump"]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("adbx 132x43")
-    assert out.count("\n") >= 87
+    assert out.startswith("adbx 80x25")
+    # 1 intestazione + 25 righe di testo + 25 righe di run attributi.
+    assert out.count("\n") >= 51
+
+
+def test_legacy_identity():
+    from adbx import GRID_HEIGHT, GRID_WIDTH, VARIANT, WINDOW_TITLE, __version__
+
+    assert __version__ == "1.0.0"
+    assert VARIANT == "legacy"
+    assert (GRID_WIDTH, GRID_HEIGHT) == (80, 25)
+    assert WINDOW_TITLE == "adbx — legacy (80×25)"
 
 
 def test_version(capsys):

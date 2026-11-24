@@ -21,7 +21,7 @@ from .widgets import (
     title_bar,
 )
 
-INDEX_KEYS = [("F1", "Help"), ("F2", "Fieldnames"), ("F5", "Delete level"),
+INDEX_KEYS = [("F1", "Help"), ("F2", "Fields"), ("F5", "Delete level"),
               ("F6", "Insert level"), ("F10", "Continue"), ("ESC", "Cancel")]
 OPTIONS_KEYS = [("F1", "Help"), ("F10", "Save"), ("ESC", "Back")]
 RANGE_KEYS = [("F1", "Help"), ("F2", "Index"), ("F3", "Key values"),

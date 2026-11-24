@@ -8,6 +8,7 @@ from PyQt6.QtCore import QPoint, Qt, QTimer
 from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget
 
+from .. import WINDOW_TITLE
 from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
 from ..config.display import (
     COMFORT_FONT_PX,
@@ -21,8 +22,8 @@ from ..render.qt_renderer import MAX_PIXEL_SIZE, MIN_PIXEL_SIZE, CellRenderer
 from ..screen.qt_input import key_from_qt
 from ..shell.controller import ShellController
 
-MIN_WIDTH = 660
-MIN_HEIGHT = 420
+MIN_WIDTH = 560
+MIN_HEIGHT = 360
 BANNER_DELAY_MS = 4000
 
 
@@ -112,10 +113,11 @@ class ScreenWidget(QWidget):
     def _update_title(self) -> None:
         zoom = self._zoom_percent()
         if zoom == ZOOM_DEFAULT:
-            self.window().setWindowTitle("adbx")
+            self.window().setWindowTitle(WINDOW_TITLE)
             return
         suffix = " (max)" if self.renderer.zoom_limited else ""
-        self.window().setWindowTitle(f"adbx — zoom {zoom}%{suffix}")
+        self.window().setWindowTitle(
+            f"{WINDOW_TITLE} — zoom {zoom}%{suffix}")
 
     def _zoom(self, delta: int) -> None:
         """Cambia il livello di zoom e lo salva; 0 ripristina il default."""
@@ -212,7 +214,7 @@ class ScreenWidget(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self, controller: ShellController | None = None) -> None:
         super().__init__()
-        self.setWindowTitle("adbx")
+        self.setWindowTitle(WINDOW_TITLE)
         self.controller = controller or ShellController()
         self.setCentralWidget(ScreenWidget(self.controller, self))
         self.statusBar().hide()
@@ -230,7 +232,13 @@ class MainWindow(QMainWindow):
     def _size_to_screen(self) -> None:
         screen = QApplication.primaryScreen()
         available = screen.availableGeometry() if screen is not None else None
-        width, height = 1452, 903
+        # Dimensione iniziale proporzionata alla griglia legacy 80x25:
+        # una cella di riferimento da 16 px piu' un piccolo margine.
+        widget = self.centralWidget()
+        cell_w, cell_h = widget.renderer.measure(16) if widget is not None \
+            else (9.6, 18.6)
+        width = round(cell_w * SCREEN_WIDTH) + 24
+        height = round(cell_h * SCREEN_HEIGHT) + 24
         if available is not None:
             width = min(width, int(available.width() * 0.92))
             height = min(height, int(available.height() * 0.92))

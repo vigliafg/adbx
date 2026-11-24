@@ -17,8 +17,8 @@ from .fields import Field, FieldError, format_value, parse_value
 FORM_LETTERS = tuple(chr(code) for code in range(ord("A"), ord("Z") + 1))
 MAX_FORMS = len(FORM_LETTERS)
 MAX_PAGES = 10
-MAX_FORM_ROW = 41
-MAX_FORM_COL = 130
+MAX_FORM_ROW = 20
+MAX_FORM_COL = 78
 JUSTIFICATIONS = ("L", "R", "C")
 SUMMARY_TYPES = ("", "First", "Last", "Count", "Biggest", "Smallest",
                  "Total", "Average")

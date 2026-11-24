@@ -30,8 +30,8 @@ from .widgets import (
 )
 
 LABEL_KEYS = [("F1", "Help"), ("F2", "Fields"), ("F4", "Calc"),
-              ("F5", "Delete"), ("F7", "Parameters"), ("F9", "Line"),
-              ("F10", "Save"), ("Alt-O", "Format")]
+              ("F5", "Del"), ("F7", "Params"), ("F9", "Line"),
+              ("F10", "Save"), ("Alt-O", "Fmt")]
 CONTENT_TOP = 4
 
 

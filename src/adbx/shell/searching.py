@@ -23,10 +23,10 @@ from .widgets import (
     window,
 )
 
-SEARCH_KEYS = [("F1", "Help"), ("F2", "Fields"), ("F3", "Operators"),
-               ("F4", "Sort order"), ("F5", "Delete row"),
-               ("F6", "Insert row"), ("F7", "Use last"), ("F8", "Desc"),
-               ("F9", "Expression"), ("F10", "Continue")]
+# Compatte per stare in 80 colonne.
+SEARCH_KEYS = [("F1", "Help"), ("F2", "Fields"), ("F3", "Ops"),
+               ("F4", "Sort"), ("F5", "Del"), ("F6", "Ins"),
+               ("F8", "Desc"), ("F9", "Expr"), ("F10", "Go")]
 SORT_KEYS = [("F1", "Help"), ("F2", "Fields"), ("F4", "Search"),
              ("F5", "Delete row"), ("F6", "Insert row"), ("F10", "Continue")]
 EXPRESSION_KEYS = [("F1", "Help"), ("F9", "Table mode"),

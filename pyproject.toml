@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "adbx"
 version = "1.0.0"
-description = "Clone funzionale moderno di Alpha Four v3: database a celle di caratteri su SQLite"
+description = "Clone funzionale moderno di Alpha Four v3: database a celle di caratteri su SQLite (variante legacy 80x25)"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

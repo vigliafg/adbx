@@ -70,6 +70,7 @@ from adbx.script import (  # noqa: E402
     ScriptStore,
 )
 from adbx.shell import screens  # noqa: E402
+from adbx.shell.widgets import View  # noqa: E402
 from adbx.shell.applications import (  # noqa: E402
     ApplicationEditor,
     ApplicationSession,
@@ -112,6 +113,11 @@ from adbx.shell.settings import (  # noqa: E402
 from adbx.shell.state import demo_state  # noqa: E402
 from adbx.shell.transfer import TransferSession  # noqa: E402
 from adbx.shell.utilities import UtilitySession  # noqa: E402
+
+
+def _fresh(view: View) -> View:
+    """Copia della vista: un overlay non deve mutare la schermata di base."""
+    return View(view.buffer.copy(), list(view.regions))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -528,7 +534,7 @@ def main(argv: list[str] | None = None) -> int:
             )))
         menu_designer = MenuBarDesigner(script_store, menu_script)
         variable_view = screens.variables_overlay(
-            menu, [("%SYS_SCRIPT_PATH", str(script_store.directory)),
+            _fresh(menu), [("%SYS_SCRIPT_PATH", str(script_store.directory)),
                    ("%SYS_VIEW_MODE", "V"), ("%SYS_TRIG_REC_SAVE", "SAVEWHAT"),
                    ("%NAME", "Wendy Richardson"),
                    ("%CATEGORY", "CANCELLED")], 0)
@@ -540,7 +546,7 @@ def main(argv: list[str] | None = None) -> int:
             ScriptEngine(script_store, ScriptHost()), debug_script)
         debug_session._step()
         scripts_menu = screens.submenu_overlay(
-            menu, list(SCRIPTS_ITEMS), 0, title="Scripts")
+            _fresh(menu), list(SCRIPTS_ITEMS), 0, title="Scripts")
         app_store = ApplicationStore(Path(temporary) / "apps")
         demo_app = Application(
             "AVSYSTEM", description="Alpha Video Store System",
@@ -565,7 +571,7 @@ def main(argv: list[str] | None = None) -> int:
                        "", "        the system for the store"]) )
         app_store.save(demo_app)
         application_menu = screens.submenu_overlay(
-            menu, list(APPLICATION_ITEMS), 0, title="Applications")
+            _fresh(menu), list(APPLICATION_ITEMS), 0, title="Applications")
         app_parameters = ApplicationEditor(app_store, demo_app)
         app_editor = ApplicationEditor(app_store, demo_app)
         app_editor.stage = "outline"
@@ -578,7 +584,7 @@ def main(argv: list[str] | None = None) -> int:
         banner_painter = BannerPainter(demo_app)
         protection = ProtectionSession(workspace, "AVMOVIES")
         other_menu = screens.submenu_overlay(
-            menu, list(OTHER_ITEMS), 0, title="Other")
+            _fresh(menu), list(OTHER_ITEMS), 0, title="Other")
         config = ConfigStore(Path(temporary))
         config.printers.install(driver_from_catalog("A", 1))
         config.printers.install(driver_from_catalog("B", 18))
@@ -659,7 +665,7 @@ def main(argv: list[str] | None = None) -> int:
             image = renderer.to_image(view.buffer)
             path = out / f"{name}.png"
             image.save(str(path))
-            print(f"{path.relative_to(ROOT)} {image.width()}x{image.height()}")
+            print(f"{os.path.relpath(path, ROOT)} {image.width()}x{image.height()}")
 
     return 0
 

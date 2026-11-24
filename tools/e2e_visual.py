@@ -258,7 +258,7 @@ def write_report(out: Path, manifest: list[dict]) -> None:
         "python tools/e2e_visual.py --dosbox   # richiede dosbox-automation",
         "```",
         "",
-        "- `adbx/` — rendering della griglia 132×43 tramite il renderer Qt;",
+        "- `adbx/` — rendering della griglia 80×25 tramite il renderer Qt;",
         "- `dosbox/` — Alpha Four 3.0 originale in dosbox-automation,",
         "  catturato via REST API (`/api/v1/video/frame`);",
         "- `manifest.json` — testo atteso, dimensioni, colori e SHA-256.",

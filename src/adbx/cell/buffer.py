@@ -11,9 +11,11 @@ from dataclasses import dataclass, replace
 from .attrs import DEFAULT_BG, DEFAULT_FG, bright, resolve_color
 from .cp437 import DOUBLE, SHADE_LIGHT, SINGLE
 
-# Griglia logica SVGA: 132 colonne (modo testo largo) per 43 righe.
-SCREEN_WIDTH = 132
-SCREEN_HEIGHT = 43
+# Griglia logica originale Alpha Four: 80 colonne per 25 righe.
+# Questa e' la variante "legacy": il font resta TrueType scalabile, la
+# geometria torna quella della console DOS.
+SCREEN_WIDTH = 80
+SCREEN_HEIGHT = 25
 
 # Le tre righe di chrome sono ancorate in fondo, come nella console originale.
 STATUS_ROW = SCREEN_HEIGHT - 3
@@ -74,6 +76,12 @@ class CellBuffer:
     def clear(self, cell: Cell = BLANK) -> None:
         for row in range(self.height):
             self._cells[row] = [cell] * self.width
+
+    def copy(self) -> "CellBuffer":
+        """Copia indipendente del buffer (le celle sono immutabili)."""
+        clone = CellBuffer(self.width, self.height)
+        clone._cells = [row[:] for row in self._cells]
+        return clone
 
     # -- scrittura -------------------------------------------------------
     def write(self, row: int, col: int, text: str, *,

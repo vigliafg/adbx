@@ -47,9 +47,9 @@ from .widgets import (
     title_bar,
 )
 
-RULE_KEYS = [("F1", "Help"), ("F5", "Delete rule"), ("F7", "Table/mapping"),
-             ("F8", "Posting rules"), ("F9", "Switch window"),
-             ("F10", "Continue"), ("ESC", "Cancel")]
+RULE_KEYS = [("F1", "Help"), ("F5", "Del rule"), ("F7", "Table/map"),
+             ("F8", "Posting"), ("F9", "Switch"),
+             ("F10", "Cont"), ("ESC", "Cancel")]
 FIELD_KEYS = [("F1", "Help"), ("F5", "Delete rule"), ("F9", "Define rule"),
               ("F10", "Continue"), ("ESC", "Cancel")]
 GRID_KEYS = [("F2", "Fields"), ("F5", "Delete row"), ("F6", "Insert row"),

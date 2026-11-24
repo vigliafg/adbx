@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH, Cell, CellBuffer
+from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ROW, Cell, CellBuffer
 from ..data.forms import (
     FORM_LETTERS,
     SUMMARY_TYPES,
@@ -35,10 +35,14 @@ from .widgets import (
     title_bar,
 )
 
-FORM_KEYS = [("F1", "Help"), ("F2", "Fields"), ("F4", "Calc/Sum"),
-             ("F5", "Delete"), ("F6", "Region"), ("F7", "Parameters"),
-             ("F8", "Draw"), ("F9", "Format"), ("F10", "Save"),
-             ("PgUp/PgDn", "Page")]
+# Limiti della pagina di design nella griglia legacy 80x25.
+MAX_ROW = STATUS_ROW - 2   # righe 0..20, la 21 resta libera sotto il cursore
+MAX_COL = SCREEN_WIDTH - 2
+
+# Compatte per stare in 80 colonne: F6/PgUp restano nella help line.
+FORM_KEYS = [("F1", "Help"), ("F2", "Fields"), ("F4", "Calc"),
+             ("F5", "Del"), ("F7", "Params"), ("F8", "Box"),
+             ("F9", "Fmt"), ("F10", "Save")]
 LAYOUT_TOP = 3
 
 
@@ -811,10 +815,6 @@ class FormDesigner:
         draw_help_line(buffer, self.theme,
                        "UP/DOWN field   F10 continue   ESC cancel")
         draw_menu_line(buffer, self.theme, FORM_KEYS)
-
-
-MAX_ROW = 40
-MAX_COL = 128
 
 
 __all__ = ["FormDesigner"]

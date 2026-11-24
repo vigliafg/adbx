@@ -147,6 +147,17 @@ def clip_text(text: str, width: int) -> str:
     return text if len(text) <= width else text[: max(0, width)]
 
 
+def elide_left(text: str, width: int) -> str:
+    """Taglia l'inizio di un testo lungo, conservando la coda (nomi file)."""
+    if width <= 0:
+        return ""
+    if len(text) <= width:
+        return text
+    if width == 1:
+        return "…"
+    return "…" + text[-(width - 1):]
+
+
 __all__ = [
     "Region",
     "View",
@@ -155,6 +166,7 @@ __all__ = [
     "draw_help_line",
     "draw_menu_line",
     "draw_status_line",
+    "elide_left",
     "prompt_line",
     "shadow",
     "text_lines",

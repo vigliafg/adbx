@@ -23,6 +23,7 @@ from .widgets import (
     draw_help_line,
     draw_menu_line,
     draw_status_line,
+    elide_left,
     prompt_line,
     shadow,
     text_lines,
@@ -64,10 +65,10 @@ COMMAND_HELP: dict[str, str] = {
 MAIN_MENU_HELP = "Select a command with the arrow keys or its hot key"
 MAIN_MENU_KEYS = [
     ("F1", "Help"),
-    ("Alt-F1", "Quick record"),
+    ("Alt-F1", "Quick rec"),
     ("Alt-F2", "Quick play"),
-    ("Alt-F3", "Script menu"),
-    ("Alt-F9", "DOS access"),
+    ("Alt-F3", "Scripts"),
+    ("Alt-F9", "DOS"),
 ]
 
 SIGN_ON_KEYS = [("F10", "Continue"), ("F9", "Change Database/Set")]
@@ -103,29 +104,36 @@ def _write_hot(buffer: CellBuffer, row: int, col: int, label: str, *,
 
 def _status_box(buffer: CellBuffer, state: ShellState, theme: Theme) -> None:
     buffer.fill_rect(0, 0, 2, SCREEN_WIDTH, " ", fg=theme.text, bg=theme.bg)
+
+    # Blocco contatori a destra: a 80 colonne le etichette lunghe
+    # mangerebbero il percorso del database.
+    counters: list[tuple[str, str]] = []
+    if state.records_text:
+        counters.append(("Records in database", state.records_text))
+    if state.records_in_list_text:
+        counters.append(("Records in list", state.records_in_list_text))
+    right_width = max((len(label) + len(value) + 3 for label, value in counters),
+                      default=0)
+
+    path_col = 20
+    path_width = min(60, max(12, SCREEN_WIDTH - path_col - right_width - 2))
     buffer.write(0, 1, "Current set" if state.set_name else "Current database",
                  fg=theme.label, bg=theme.bg)
     buffer.write(0, 18, ":", fg=theme.label, bg=theme.bg)
-    buffer.write(0, 20, clip_text(state.current_path_text, 60),
+    buffer.write(0, path_col, clip_text(state.current_path_text, path_width),
                  fg=theme.text, bg=theme.bg, bold=True)
     buffer.write(1, 1, "Primary index", fg=theme.label, bg=theme.bg)
     buffer.write(1, 18, ":", fg=theme.label, bg=theme.bg)
-    buffer.write(1, 20, state.primary_index_label,
+    buffer.write(1, path_col,
+                 clip_text(state.primary_index_label, path_width),
                  fg=theme.text, bg=theme.bg)
 
-    records = state.records_text
-    if records:
-        label, value = "Records in database", f" : {records}"
-        start = SCREEN_WIDTH - len(label) - len(value) - 1
-        buffer.write(0, start, label, fg=theme.label, bg=theme.bg)
-        buffer.write(0, start + len(label), value, fg=theme.text, bg=theme.bg)
-    in_list = state.records_in_list_text
-    if in_list:
-        label = "Records in list"
-        value = f" : {in_list}"
-        start = SCREEN_WIDTH - len(label) - len(value) - 1
-        buffer.write(1, start, label, fg=theme.label, bg=theme.bg)
-        buffer.write(1, start + len(label), value, fg=theme.text, bg=theme.bg)
+    for row, (label, value) in enumerate(counters):
+        text = f"{label} : {value}"
+        start = SCREEN_WIDTH - len(text) - 1
+        buffer.write(row, start, label, fg=theme.label, bg=theme.bg)
+        buffer.write(row, start + len(label), f" : {value}",
+                     fg=theme.text, bg=theme.bg)
 
 
 def main_menu(state: ShellState, selected: int = 0,
@@ -190,7 +198,8 @@ def sign_on(state: ShellState, startup_path: Path | None = None,
         default_text = f"Default database/set : {startup_path}"
     else:
         default_text = "Default database/set : (none)"
-    draw_status_line(buffer, theme, clip_text(default_text, SCREEN_WIDTH - 2))
+    draw_status_line(buffer, theme,
+                     elide_left(default_text, SCREEN_WIDTH - 2))
     draw_help_line(buffer, theme, SIGN_ON_HELP)
     regions = draw_menu_line(buffer, theme, SIGN_ON_KEYS)
     return View(buffer, regions)
@@ -204,10 +213,15 @@ def directory(state: ShellState, cursor: int, input_text: str, input_cursor: int
                      fg=theme.text, bg=theme.bg)
     title_bar(buffer, DIRECTORY_TITLE, theme)
 
-    buffer.write(2, 1, "Drive/Path", fg=theme.label, bg=theme.bg)
-    buffer.write(2, 13, ":", fg=theme.label, bg=theme.bg)
-    buffer.write(2, 15, clip_text(state.path_text(), SCREEN_WIDTH - 20),
-                 fg=theme.text, bg=theme.bg, bold=True)
+    # A 80 colonne un percorso lungo non sta accanto all'etichetta:
+    # in quel caso si mostra il percorso da solo, dalla colonna 2.
+    path_text = clip_text(state.path_text(), SCREEN_WIDTH - 4)
+    if 15 + len(path_text) <= SCREEN_WIDTH - 1:
+        buffer.write(2, 1, "Drive/Path", fg=theme.label, bg=theme.bg)
+        buffer.write(2, 13, ":", fg=theme.label, bg=theme.bg)
+        buffer.write(2, 15, path_text, fg=theme.text, bg=theme.bg, bold=True)
+    else:
+        buffer.write(2, 2, path_text, fg=theme.text, bg=theme.bg, bold=True)
     buffer.write(3, 1, "Default", fg=theme.label, bg=theme.bg)
     buffer.write(3, 13, ":", fg=theme.label, bg=theme.bg)
     buffer.write(3, 15, state.default_types_text, fg=theme.text, bg=theme.bg)
@@ -232,7 +246,7 @@ def directory(state: ShellState, cursor: int, input_text: str, input_cursor: int
         selected = index == cursor
         fg, bg = (theme.selected_fg, theme.selected_bg) if selected else (theme.text, theme.bg)
         if selected:
-            buffer.fill_rect(row, 0, 1, 78, " ", fg=fg, bg=bg)
+            buffer.fill_rect(row, 0, 1, SCREEN_WIDTH, " ", fg=fg, bg=bg)
         name = entry.name if entry.kind != "file" else entry.name
         buffer.write(row, LIST_LEFT, clip_text(name, NAME_WIDTH), fg=fg, bg=bg)
         if entry.kind == "file":
@@ -254,11 +268,13 @@ def directory(state: ShellState, cursor: int, input_text: str, input_cursor: int
     if first + visible < len(entries):
         buffer.write(LIST_TOP + visible - 1, 0, "↓", fg=theme.accent, bg=theme.bg, bold=True)
     if state.listing and state.listing.error:
-        buffer.write(LIST_TOP, LIST_LEFT, clip_text(state.listing.error, 100),
+        buffer.write(LIST_TOP, LIST_LEFT, clip_text(state.listing.error,
+                                                   SCREEN_WIDTH - LIST_LEFT),
                      fg=theme.accent, bg=theme.bg)
 
     prompt_region, _cursor_col = prompt_line(
-        buffer, theme, "Enter name of the database/set", input_text, input_cursor)
+        buffer, theme, "Enter name of the database/set", input_text,
+        input_cursor)
     regions.append(prompt_region)
     draw_status_line(buffer, theme)
     regions.extend(draw_menu_line(buffer, theme, _directory_keys(state)))
@@ -342,7 +358,8 @@ def status_screen(state: ShellState, theme: Theme = NEWPORT) -> View:
         row = 2 + offset
         buffer.write(row, 2, label, fg=theme.label, bg=theme.bg)
         buffer.write(row, 16, ":", fg=theme.label, bg=theme.bg)
-        buffer.write(row, 18, clip_text(value, 100), fg=theme.text, bg=theme.bg)
+        buffer.write(row, 18, clip_text(value, SCREEN_WIDTH - 19),
+                     fg=theme.text, bg=theme.bg)
     draw_status_line(buffer, theme)
     regions = draw_menu_line(buffer, theme, [("F10", "Continue")])
     return View(buffer, regions)
@@ -422,10 +439,10 @@ def help_overlay(base: View, topic_id: str, *, scroll: int = 0, link_index: int 
     """Finestra di aiuto con link; ritorna vista, span e posizioni schermo."""
     current = topic(topic_id)
     lines = wrap_topic(current, 72)
-    max_body = 30
+    max_body = max(6, STATUS_ROW - 7)
     scroll = max(0, min(scroll, max(0, len(lines) - max_body)))
     visible = lines[scroll:scroll + max_body]
-    height = max(8, len(visible) + 6)
+    height = min(STATUS_ROW - 1, max(8, len(visible) + 6))
     width = 76
     panel = window(width, height, current.title, theme)
 
@@ -547,7 +564,7 @@ def choose_overlay(base: View, title: str, items: list[tuple[str, str]],
 def variables_overlay(base: View, items: list[tuple[str, str]],
                       selected: int, theme: Theme = NEWPORT) -> View:
     """Elenco delle variabili di script, con valore corrente."""
-    width = 90
+    width = min(76, SCREEN_WIDTH - 4)
     height = min(STATUS_ROW - 3, max(7, len(items) + 5))
     panel = window(width, height, "Script Variables", theme)
     regions: list[Region] = []
@@ -559,7 +576,7 @@ def variables_overlay(base: View, items: list[tuple[str, str]],
             break
         name, value = items[index]
         row = 2 + offset
-        text = f"{name:<26} {value}"
+        text = clip_text(f"{name:<26} {value}", width - 4)
         if index == selected:
             panel.fill_rect(row, 1, 1, width - 2, " ",
                             fg=theme.selected_fg, bg=theme.selected_bg)
@@ -611,7 +628,7 @@ def fields_overlay(base: View, fields: list[str], chosen: list[str],
 
 def search_history_overlay(base: View, history: list, selected: int,
                            theme: Theme = NEWPORT, database=None) -> View:
-    width = 82
+    width = min(78, SCREEN_WIDTH - 2)
     height = max(8, min(len(history), 10) + 5)
     panel = window(width, height, "Search/Sort List History", theme)
     regions: list[Region] = []

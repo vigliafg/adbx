@@ -66,7 +66,7 @@ def test_visual_e2e_scenarios_produce_screenshots(tmp_path):
     for entry in manifest:
         path = out / entry["file"]
         assert path.is_file() and path.stat().st_size > 5000
-        assert entry["width"] == 1320 and entry["height"] == 817
+        assert entry["width"] == 800 and entry["height"] == 475
         assert entry["sampled_colors"] >= 2
         hashes.add(entry["sha256"])
     assert len(hashes) == len(manifest)

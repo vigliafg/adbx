@@ -50,10 +50,10 @@ from .widgets import (
     title_bar,
 )
 
-REPORT_KEYS = [("F1", "Help"), ("F2", "Fields"), ("F3", "Sections"),
-               ("F4", "Calc"), ("F5", "Delete"), ("F6", "Group"),
-               ("F7", "Goto"), ("F9", "Line"), ("F10", "Save"),
-               ("Alt-O", "Format")]
+# Compatte per stare in 80 colonne: Alt-O resta nella help line.
+REPORT_KEYS = [("F1", "Help"), ("F2", "Flds"), ("F3", "Sect"),
+               ("F4", "Calc"), ("F5", "Del"), ("F6", "Grp"),
+               ("F7", "Goto"), ("F9", "Line"), ("F10", "Save")]
 CONTENT_TOP = 3
 
 

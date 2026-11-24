@@ -14,6 +14,7 @@ def qapp():
 
 
 def test_renderer_size_and_image(qapp):
+    from adbx.cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
     from adbx.render.qt_renderer import CellRenderer
     from adbx.shell import screens
     from adbx.shell.state import demo_state
@@ -33,6 +34,7 @@ def test_renderer_size_and_image(qapp):
 
 def test_rendering_produces_lit_pixels(qapp):
     from adbx.cell.buffer import CellBuffer
+    from adbx.cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
     from adbx.render.qt_renderer import CellRenderer
 
     buffer = CellBuffer(4, 1)
@@ -51,6 +53,7 @@ def test_rendering_produces_lit_pixels(qapp):
 
 def test_blink_phase_hides_glyph(qapp):
     from adbx.cell.buffer import CellBuffer
+    from adbx.cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
     from adbx.render.qt_renderer import CellRenderer
 
     buffer = CellBuffer(2, 1)
@@ -73,6 +76,7 @@ def test_blink_phase_hides_glyph(qapp):
 
 def test_underline_is_drawn(qapp):
     from adbx.cell.buffer import CellBuffer
+    from adbx.cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
     from adbx.render.qt_renderer import CellRenderer
 
     plain = CellBuffer(6, 1)
@@ -94,53 +98,61 @@ def test_underline_is_drawn(qapp):
 
 
 def test_fit_scales_with_window(qapp):
+    from adbx.cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
     from adbx.render.qt_renderer import CellRenderer
 
     renderer = CellRenderer(pixel_size=12)
-    renderer.fit(900, 600, 132, 43)
+    renderer.fit(900, 600, SCREEN_WIDTH, SCREEN_HEIGHT)
     small = renderer.pixel_size
-    small_w, small_h = renderer.grid_size(132, 43)
+    small_w, small_h = renderer.grid_size(SCREEN_WIDTH, SCREEN_HEIGHT)
     assert small_w <= 900 and small_h <= 600
 
-    renderer.fit(1800, 1200, 132, 43)
+    renderer.fit(1800, 1200, SCREEN_WIDTH, SCREEN_HEIGHT)
     assert renderer.pixel_size >= small
-    big_w, big_h = renderer.grid_size(132, 43)
+    big_w, big_h = renderer.grid_size(SCREEN_WIDTH, SCREEN_HEIGHT)
     assert big_w <= 1800 and big_h <= 1200
     assert big_w > small_w and big_h > small_h
 
 
 def test_fit_ceiling_leaves_margins(qapp):
+    from adbx.cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
     from adbx.render.qt_renderer import CellRenderer
 
     renderer = CellRenderer(pixel_size=12)
-    renderer.fit(3000, 2000, 132, 43, ceiling=24)
+    renderer.fit(3000, 2000, SCREEN_WIDTH, SCREEN_HEIGHT, ceiling=24)
     assert renderer.pixel_size == 24
     assert not renderer.zoom_limited
-    width, height = renderer.grid_size(132, 43)
+    width, height = renderer.grid_size(SCREEN_WIDTH, SCREEN_HEIGHT)
     assert width < 3000 and height < 2000
 
 
 def test_fit_zoom_uses_slack_but_never_overflows(qapp):
+    from adbx.cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
     from adbx.render.qt_renderer import CellRenderer
 
     renderer = CellRenderer(pixel_size=12)
-    renderer.fit(3000, 2000, 132, 43, ceiling=24, zoom=1.5)
+    renderer.fit(3000, 2000, SCREEN_WIDTH, SCREEN_HEIGHT, ceiling=24, zoom=1.5)
     assert renderer.pixel_size > 24
-    width, height = renderer.grid_size(132, 43)
+    width, height = renderer.grid_size(SCREEN_WIDTH, SCREEN_HEIGHT)
     assert width <= 3000 and height <= 2000
 
-    renderer.fit(1452, 903, 132, 43, ceiling=24)
+    # Finestra che riempie esattamente la griglia al tetto di leggibilita':
+    # lo zoom 150% non puo' crescere, lo zoom 50% si'.
+    renderer.fit(3000, 2000, SCREEN_WIDTH, SCREEN_HEIGHT, ceiling=24)
+    fit_w, fit_h = renderer.grid_size(SCREEN_WIDTH, SCREEN_HEIGHT)
+    renderer.fit(fit_w, fit_h, SCREEN_WIDTH, SCREEN_HEIGHT, ceiling=24)
     base = renderer.pixel_size
-    renderer.fit(1452, 903, 132, 43, ceiling=24, zoom=1.5)
+    renderer.fit(fit_w, fit_h, SCREEN_WIDTH, SCREEN_HEIGHT, ceiling=24, zoom=1.5)
     assert renderer.pixel_size == base
     assert renderer.zoom_limited
 
-    renderer.fit(1452, 903, 132, 43, ceiling=24, zoom=0.5)
+    renderer.fit(fit_w, fit_h, SCREEN_WIDTH, SCREEN_HEIGHT, ceiling=24, zoom=0.5)
     assert renderer.pixel_size < base
     assert not renderer.zoom_limited
 
 
 def test_cells_come_from_font_metrics(qapp):
+    from adbx.cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
     from adbx.render.qt_renderer import CellRenderer
 
     renderer = CellRenderer(pixel_size=20)
@@ -153,6 +165,7 @@ def test_cells_come_from_font_metrics(qapp):
 
 def test_geometric_line_is_continuous(qapp):
     from adbx.cell.buffer import CellBuffer
+    from adbx.cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
     from adbx.render.qt_renderer import CellRenderer
 
     buffer = CellBuffer(1, 4)
