@@ -1,7 +1,9 @@
 # Piano — `adbx-legacy`: ripristino dell'interfaccia originale 80×25
 
-> **Stato:** piano approvato, **non ancora eseguito**.
+> **Stato:** **eseguito e completato** il 2026-11-24.
 > **Data:** 2026-11-24.
+> **Esito:** tutti i criteri della sezione 8 verificati; dettaglio delle fasi,
+> verifiche visive e limiti accettati in `DIARIO-LEGACY.md` (step 1–8).
 > **Obiettivo:** creare un worktree `adbx-legacy` autonomo, collegato allo
 > stesso repository `adbx`, con la griglia logica originale **80×25** e font
 > TrueType scalabile, lasciando `adbx` (132×43) completamente intatto.
