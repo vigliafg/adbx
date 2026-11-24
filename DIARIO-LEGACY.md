@@ -283,3 +283,18 @@ Verifica finale del piano (§8), eseguita sul worktree pulito:
 Tutti i criteri del piano sono soddisfatti. La variante legacy è completa:
 stessa suite della linea principale, stessa parità funzionale, interfaccia
 80×25 con font scalabile e isolamento totale dei dati.
+
+## Step 9 — 2026-11-24 — Launcher `start-legacy.sh`
+
+- Nuovo `start-legacy.sh` eseguibile: entra nella directory del worktree e
+  delega a `start.sh`, che sceglie `.venv/bin/python` o l'interprete di
+  sistema. Non serve `source .venv/bin/activate` e `config.json`/dati restano
+  nella legacy anche lanciandolo da `../adbx`.
+- README aggiornato con l'uso da qualunque directory.
+
+### Verifica
+
+- Da `adbx`: `../adbx-legacy/start-legacy.sh --smoke` →
+  `adbx 1.0.0: griglia 80x25, digest 9f8b632350151a12`; `--version` →
+  `adbx 1.0.0`.
+- `adbx` resta pulito: hash dello status invariato.

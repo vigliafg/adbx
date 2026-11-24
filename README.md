@@ -83,12 +83,13 @@ delle schermate.
   e sul ramo `adbx-legacy`; `adbx` resta intatto. Usa il proprio `.venv`
   (creato da `start.sh`), il proprio `config.json` e un workspace separato:
   nessun file dell'altra copia viene toccato.
-- **Avvio.** Sempre dalla radice del worktree, perché `start.sh` non cambia
-  directory e i percorsi relativi (`config.json`, dati) seguono la cwd:
+- **Avvio.** Sempre dalla radice del worktree, perché i percorsi relativi
+  (`config.json`, dati) seguono la cwd. `start-legacy.sh` entra da solo nella
+  directory giusta e non richiede l'attivazione del venv:
 
   ```bash
-  cd ../adbx-legacy
-  ./start.sh
+  ../adbx-legacy/start-legacy.sh          # da qualunque directory
+  cd ../adbx-legacy && ./start.sh         # equivalente
   ./start.sh --data ~/dati-legacy
   ./start.sh --smoke        # adbx 1.0.0: griglia 80x25, digest ...
   ```
