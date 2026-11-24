@@ -187,3 +187,28 @@ L'audit ha trovato 112 scritture fuori griglia in 15 punti:
 - Form designer: un campo con lunghezza dati 6 mostra `[INV_N…`, perché il
   segnaposto occupa esattamente l'area dati del campo.
 
+## Step 6 — 2026-11-24 — Golden, screenshot e artefatti
+
+- `tests/golden/*.txt`: verificati a 51 righe (`adbx 80x25` + 25 righe di
+  testo + 25 di attributi); nessun cambiamento rispetto allo step 3.
+- `docs/render/`: rigenerate **tutte** le 62 immagini (erano 56 a 132×43,
+  1452×903) a 880×525 con `tools/capture_ui.py`: main menu, directory, help,
+  struttura, stato, record, designer, tabelle, anteprime, script, applicazioni,
+  configurazione, documentazione, memo. `06-alpha-four-dosbox.png` è il
+  riferimento DOSBox originale (1024×768) e resta invariato.
+- `docs/e2e/`: rigenerati gli 8 PNG (800×475), `manifest.json` e `README.md`
+  con `tools/e2e_visual.py`; le impronte SHA-256 sono nuove, le dimensioni nel
+  manifest sono 800×475.
+- `tests/test_dosbox_automation.py` già allineato (800×475); il test sugli
+  artefatti committati resta verde.
+- `ruff` non è installato nell'ambiente: controllo di stile non eseguito (i
+  test e l'audit coprono il resto).
+
+### Verifica di questo step
+
+- `pytest`: **520 test verdi**.
+- Ispezione visiva dei PNG committati: main menu 880×525 e browse E2E 800×475
+  con help/menu line complete.
+- `python3 -m adbx --smoke --dump`: prima riga `adbx 80x25`, dump di
+  51 righe (la 52ª è la riga di stato dello smoke).
+
