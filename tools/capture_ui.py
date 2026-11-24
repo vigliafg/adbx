@@ -120,22 +120,8 @@ def _fresh(view: View) -> View:
     return View(view.buffer.copy(), list(view.regions))
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--out", default=str(ROOT / "docs" / "render"))
-    parser.add_argument("--pixel-size", type=int, default=18,
-                        help="altezza del font in pixel; la cella ne deriva")
-    args = parser.parse_args(argv)
-
-    app = QGuiApplication(sys.argv[:1])  # noqa: F841
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
-
-    renderer = CellRenderer(pixel_size=args.pixel_size)
-    renderer.use_natural_size(args.pixel_size, dpr=1.0)
-    print(f"font {renderer.family}, corpo {args.pixel_size}px, "
-          f"cella {renderer.cell_w:.2f}x{renderer.cell_h:.2f}")
-
+def build_views() -> dict[str, View]:
+    """Costruisce tutte le viste canoniche (cattura e test di layout)."""
     state = demo_state()
     menu = screens.main_menu(state, selected=0)
     directory = screens.directory(
@@ -277,7 +263,7 @@ def main(argv: list[str] | None = None) -> int:
             FormLabel(0, 6, 2, "Rating:"),
             FormLabel(0, 9, 2, "Description:"),
         ]
-        movie_form.boxes = [FormBox(0, 2, 1, 7, 92, True)]
+        movie_form.boxes = [FormBox(0, 2, 1, 7, 78, True)]
         movie_form.fields = [
             FormField("AVMOVIES", "TAPE_ID", 0, 3, 10, 4, 4),
             FormField("AVMOVIES", "TAPE_TITLE", 0, 4, 10, 40, 40),
@@ -298,8 +284,8 @@ def main(argv: list[str] | None = None) -> int:
             FormLabel(0, 3, 2, "City:"),
             FormLabel(0, 9, 2, "Line items"),
         ]
-        set_form.boxes = [FormBox(0, 1, 1, 8, 100, True),
-                          FormBox(0, 11, 1, 12, 80, True)]
+        set_form.boxes = [FormBox(0, 1, 1, 8, 78, True),
+                          FormBox(0, 11, 1, 12, 78, True)]
         set_form.fields = [
             FormField("AVHEADER", "INV_NO", 0, 1, 14, 6, 6),
             FormField("AVPATRON", "NAME", 0, 2, 14, 20, 20),
@@ -661,12 +647,31 @@ def main(argv: list[str] | None = None) -> int:
             "55-screen-colors": color_session.view(),
             "56-documentation": doc_session.view(),
         }
-        for name, view in shots.items():
-            image = renderer.to_image(view.buffer)
-            path = out / f"{name}.png"
-            image.save(str(path))
-            print(f"{os.path.relpath(path, ROOT)} {image.width()}x{image.height()}")
+    return shots
 
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--out", default=str(ROOT / "docs" / "render"))
+    parser.add_argument("--pixel-size", type=int, default=18,
+                        help="altezza del font in pixel; la cella ne deriva")
+    args = parser.parse_args(argv)
+
+    app = QGuiApplication(sys.argv[:1])  # noqa: F841
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+
+    renderer = CellRenderer(pixel_size=args.pixel_size)
+    renderer.use_natural_size(args.pixel_size, dpr=1.0)
+    print(f"font {renderer.family}, corpo {args.pixel_size}px, "
+          f"cella {renderer.cell_w:.2f}x{renderer.cell_h:.2f}")
+
+    views = build_views()
+    for name, view in views.items():
+        image = renderer.to_image(view.buffer)
+        path = out / f"{name}.png"
+        image.save(str(path))
+        print(f"{os.path.relpath(path, ROOT)} {image.width()}x{image.height()}")
     return 0
 
 

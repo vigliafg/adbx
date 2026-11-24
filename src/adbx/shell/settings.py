@@ -735,13 +735,15 @@ class DocumentationSession:
                     buffer.fill_rect(row, 1, 1, 60, " ",
                                      fg=self.theme.selected_fg,
                                      bg=self.theme.selected_bg)
-                buffer.write(row, 2, text,
+                buffer.write(row, 2, clip_text(text, SCREEN_WIDTH - 3),
                              fg=self.theme.selected_fg if active else self.theme.text,
                              bg=self.theme.selected_bg if active else self.theme.bg)
         else:
             if self.output is not None and self.output.pages:
-                for index, line in enumerate(self.output.pages[0].lines[:36]):
-                    buffer.write(2 + index, 1, clip_text(line, 128),
+                for index, line in enumerate(
+                        self.output.pages[0].lines[:STATUS_ROW - 2]):
+                    buffer.write(2 + index, 1,
+                                 clip_text(line, SCREEN_WIDTH - 2),
                                  fg=self.theme.text, bg=self.theme.bg)
         draw_status_line(buffer, self.theme, self.status or
                          "ENTER selects; F10 generates or closes")

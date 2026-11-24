@@ -11,7 +11,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ROW, Cell, CellBuffer
+from ..cell.buffer import (
+    Cell,
+    CellBuffer,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    STATUS_ROW,
+    clipping_allowed,
+)
 from ..data.fields import Field
 from ..data.report_engine import ReportOutput
 from ..data.reports import (
@@ -1594,6 +1601,7 @@ class ReportDesigner:
                        "UP/DOWN field   TAB column   ENTER edit   "
                        "F10 back")
 
+    @clipping_allowed  # il canvas di stampa può superare le 80 colonne
     def _view_layout(self, buffer: CellBuffer) -> None:
         report = self.report
         assert report is not None

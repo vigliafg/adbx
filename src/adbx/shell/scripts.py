@@ -383,6 +383,12 @@ class ScriptEditor:
         return View(buffer, regions)
 
 
+# Debugger: sorgente a sinistra, variabili a destra (griglia 80 colonne).
+SOURCE_WIDTH = 48
+SOURCE_COLUMNS = 50          # colonna della separatrice verticale
+VARIABLES_COL = 53
+
+
 @dataclass
 class DialogDesigner:
     """Designer a celle di un dialog box."""
@@ -602,6 +608,8 @@ class DialogDesigner:
         self.status = f"Dialog box {self.script.name} saved."
         return True
 
+    CONTROL_COLUMNS = ((1, 8), (10, 3), (14, 3), (18, 5), (24, 27), (52, 26))
+
     def view(self) -> View:
         buffer = CellBuffer(SCREEN_WIDTH, SCREEN_HEIGHT,
                             Cell(fg=self.theme.text, bg=self.theme.bg))
@@ -617,33 +625,33 @@ class DialogDesigner:
             text = str(self.values()[index])
             if active and self.edit_text != text:
                 text = self.edit_text
-            buffer.write(row, 15, clip_text(text, 60),
+            buffer.write(row, 15, clip_text(text, 12),
                          fg=self.theme.selected_fg if active else self.theme.text,
                          bg=self.theme.selected_bg if active else self.theme.bg)
-        buffer.write(1, 72, "Controls", fg=self.theme.accent, bg=self.theme.bg,
+        buffer.write(11, 1, "Controls", fg=self.theme.accent, bg=self.theme.bg,
                      bold=True)
         headers = ("Type", "Row", "Col", "Width", "Variable/Label", "Action")
-        for col, header in enumerate(headers):
-            buffer.write(2, 72 + col * 9, clip_text(header, 9),
+        for (x, width), header in zip(self.CONTROL_COLUMNS, headers):
+            buffer.write(12, x, clip_text(header, width),
                          fg=self.theme.label, bg=self.theme.bg)
         for index, control in enumerate(self.dialog.controls):
-            row = 3 + index
-            if row >= 20:
+            row = 13 + index
+            if row >= 21:
                 break
             active = self.focus == "controls" and index == self.control
             values = (control.kind, control.row, control.col, control.width,
                       control.variable or control.label, control.action)
-            for col, text in enumerate(values):
-                x = 72 + col * 9
+            for col, ((x, width), text) in enumerate(
+                    zip(self.CONTROL_COLUMNS, values)):
                 if active and col == self.column:
                     if self.edit_text != str(text):
                         text = self.edit_text
                     fg, bg = self.theme.selected_fg, self.theme.selected_bg
                 else:
                     fg, bg = self.theme.text, self.theme.bg
-                buffer.write(row, x, clip_text(str(text), 9), fg=fg, bg=bg)
-        preview = window(max(12, min(self.dialog.width, 70)),
-                         max(4, min(self.dialog.height, 20)),
+                buffer.write(row, x, clip_text(str(text), width), fg=fg, bg=bg)
+        preview = window(max(12, min(self.dialog.width, 48)),
+                         max(4, min(self.dialog.height, 10)),
                          self.dialog.title or self.script.name, self.theme)
         for control in self.dialog.controls:
             row = min(control.row, preview.height - 2)
@@ -654,7 +662,7 @@ class DialogDesigner:
                 text = f"{control.label} {text}"
             preview.write(row, col, clip_text(text, control.width),
                           fg=self.theme.window_fg, bg=self.theme.window_bg)
-        blit(buffer, preview, 12, 2)
+        blit(buffer, preview, 1, 30)
         draw_status_line(buffer, self.theme, self.status or
                          "TAB switch pane   ENTER edit   F2/F3/F4 add")
         draw_help_line(buffer, self.theme,
@@ -894,19 +902,22 @@ class ScriptDebugSession:
         if self.runner is not None and self.runner.pc < len(self.runner.tokens):
             position = self.runner.tokens[self.runner.pc].position
             current = self.script.source[:position].count("\n")
-        for offset, line in enumerate(lines[:36]):
+        for offset, line in enumerate(lines[:STATUS_ROW - 2]):
             row = 2 + offset
             active = offset == current
-            buffer.write(row, 1, clip_text(line, 128),
+            buffer.write(row, 1, clip_text(line, SOURCE_WIDTH),
                          fg=self.theme.selected_fg if active else self.theme.text,
                          bg=self.theme.selected_bg if active else self.theme.bg,
                          bold=active)
         variables = [f"%{name[1:]}={value}" for name, value in
                      self.engine.variables.items()[:8]]
-        buffer.write(2, 98, "Variables", fg=self.theme.accent, bg=self.theme.bg,
-                     bold=True)
+        buffer.vline(1, SOURCE_COLUMNS + 1, STATUS_ROW - 1,
+                     fg=self.theme.border, bg=self.theme.bg)
+        buffer.write(2, VARIABLES_COL, "Variables", fg=self.theme.accent,
+                     bg=self.theme.bg, bold=True)
         for index, text in enumerate(variables):
-            buffer.write(3 + index, 98, clip_text(text, 33),
+            buffer.write(3 + index, VARIABLES_COL,
+                         clip_text(text, SCREEN_WIDTH - VARIABLES_COL - 1),
                          fg=self.theme.text, bg=self.theme.bg)
         draw_status_line(buffer, self.theme,
                          self.status or "F10 step   F5 run   F4 debug   ESC")

@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ROW, Cell, CellBuffer
+from ..cell.buffer import (
+    Cell,
+    CellBuffer,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    STATUS_ROW,
+    clipping_allowed,
+)
 from ..data.fields import format_value
 from . import screens
 from .records import RecordSession
@@ -132,17 +139,15 @@ def _form_field_hint(session: RecordSession) -> str:
 
 def _form_hint(session: RecordSession) -> str:
     if session.locate is not None:
-        return "F3 next locate   ESC exit locate   ALT-M memo   ALT-D delete"
+        return "F3 next locate   ESC exit locate   ALT-M Memo   ALT-D Delete"
     if session.mode == "view":
-        return ("F Find   L Locate   I Index   R Range   F7 show deleted   "
-                "ALT-M memo   ALT-D delete")
+        return ("F7 Deleted   S Replace   T Tools   "
+                "Alt-D Delete   Alt-U Undelete")
     if session.mode == "browse":
-        return ("F Find   L Locate   I Index   R Range   F7 show deleted   "
-                "F10 continue")
+        return "F7 Deleted   T Tools   Alt-D Delete   Alt-U Undelete"
     if session.mode == "enter":
-        return ("TAB next field   ENTER next record   F10 save and exit   "
-                "ESC cancel   ALT-M memo")
-    return "TAB next field   F10 save   ESC cancel   ALT-M memo   ALT-F5 copy   ALT-F6 paste"
+        return "TAB next   ENTER next record   Alt-F6 Paste"
+    return "TAB next   F10 save   ESC cancel   Alt-F6 Paste"
 
 
 def browse_screen(session: RecordSession, theme: Theme = NEWPORT) -> View:
@@ -333,6 +338,7 @@ def lookup_overlay(session: RecordSession, theme: Theme = NEWPORT) -> View:
                                 regions, theme)
 
 
+@clipping_allowed
 def custom_form_screen(session: RecordSession,
                        theme: Theme = NEWPORT) -> View:
     """Form definito dall'utente: campi, testi, riquadri e pagine."""

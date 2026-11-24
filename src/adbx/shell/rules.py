@@ -594,9 +594,10 @@ class RulesSession:
         buffer.write(1, 46, ":", fg=self.theme.label, bg=self.theme.bg)
         buffer.write(1, 48, field.name if field is not None else "",
                      fg=self.theme.text, bg=self.theme.bg)
-        buffer.write(1, 66, "Type", fg=self.theme.label, bg=self.theme.bg)
-        buffer.write(1, 74, ":", fg=self.theme.label, bg=self.theme.bg)
-        buffer.write(1, 76, type_name, fg=self.theme.text, bg=self.theme.bg)
+        buffer.write(1, 62, "Type", fg=self.theme.label, bg=self.theme.bg)
+        buffer.write(1, 66, ":", fg=self.theme.label, bg=self.theme.bg)
+        buffer.write(1, 68, clip_text(type_name, SCREEN_WIDTH - 69),
+                     fg=self.theme.text, bg=self.theme.bg)
         buffer.write(2, 2, "Fieldname", fg=self.theme.text,
                      bg=self.theme.bg, bold=True)
         buffer.write(2, 34, "Type", fg=self.theme.text, bg=self.theme.bg,
@@ -1083,9 +1084,9 @@ class PostingEditor(GridEditor):
             [PostingRule()]
         self.database = database
         self.title = "Posting Rules"
-        self.columns = (("Database", 12), ("Field to post to", 18),
-                        ("Mode", 10), ("Condition", 12), ("Expression", 18),
-                        ("Link index", 14), ("Common", 14))
+        self.columns = (("Database", 10), ("Field to post to", 14),
+                        ("Mode", 8), ("Condition", 10), ("Expression", 14),
+                        ("Link index", 10), ("Common", 10))
         self._load_cell()
 
     def row_count(self) -> int:

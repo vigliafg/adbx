@@ -22,6 +22,7 @@ def test_write_returns_next_column():
     assert buffer.text_of(0) == "  abc"
 
 
+@pytest.mark.allow_clipping
 def test_write_clips_at_right_edge():
     buffer = CellBuffer(5, 1)
     end = buffer.write(0, 3, "abcdef")
@@ -29,6 +30,7 @@ def test_write_clips_at_right_edge():
     assert end == 5
 
 
+@pytest.mark.allow_clipping
 def test_write_clips_negative_column():
     buffer = CellBuffer(5, 1)
     buffer.write(0, -2, "abcd")
@@ -48,6 +50,7 @@ def test_style_applies_to_all_cells():
     assert (cell.ch, cell.fg, cell.bg, cell.bold) == ("b", 14, 1, True)
 
 
+@pytest.mark.allow_clipping
 def test_write_outside_rows_is_noop():
     buffer = CellBuffer(4, 2)
     assert buffer.write(9, 0, "x") == 0

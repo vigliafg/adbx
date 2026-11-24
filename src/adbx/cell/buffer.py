@@ -6,7 +6,11 @@ Tutto il resto (form, popup, regioni, report) scrive in un buffer.
 
 from __future__ import annotations
 
+import sys
+from contextlib import contextmanager
+from functools import wraps
 from dataclasses import dataclass, replace
+from typing import Iterator
 
 from .attrs import DEFAULT_BG, DEFAULT_FG, bright, resolve_color
 from .cp437 import DOUBLE, SHADE_LIGHT, SINGLE
@@ -50,6 +54,86 @@ BLANK = Cell()
 SHADOW = Cell(SHADE_LIGHT, fg=8, bg=0)
 
 
+@dataclass(frozen=True, slots=True)
+class ClipEvent:
+    """Scrittura richiesta fuori dalla griglia, registrata solo nei test.
+
+    Il video originale taglia in silenzio: qui il taglio resta silenzioso in
+    produzione, ma con l'audit attivo ogni scrittura oltre i bordi finisce in
+    un elenco, così un layout che sborda viene scoperto dai test.
+    """
+
+    kind: str  # "write" | "fill"
+    row: int
+    col: int
+    detail: str
+    where: str = ""  # modulo:funzione:riga del primo chiamante fuori dal buffer
+
+
+_CLIP_LOG: list[ClipEvent] | None = None
+_CLIP_ALLOWED = 0
+
+
+@contextmanager
+def allow_clipping() -> Iterator[None]:
+    """Dichiara voluto il taglio: canvas più larghi dello schermo (form, label).
+
+    Le definizioni salvate da versioni a 132 colonne possono eccedere la
+    griglia 80x25: il disegno viene tagliato dal bordo, come sul video
+    originale, senza che l'audit lo segnali come errore di layout.
+    """
+    global _CLIP_ALLOWED
+    _CLIP_ALLOWED += 1
+    try:
+        yield
+    finally:
+        _CLIP_ALLOWED -= 1
+
+
+@contextmanager
+def audit_clipping() -> Iterator[list[ClipEvent]]:
+    """Raccoglie le scritture fuori bordo finché il contesto è aperto."""
+    global _CLIP_LOG
+    if _CLIP_LOG is not None:  # audit annidato: usa l'elenco esterno
+        yield _CLIP_LOG
+        return
+    log: list[ClipEvent] = []
+    _CLIP_LOG = log
+    try:
+        yield log
+    finally:
+        _CLIP_LOG = None
+
+
+def _record_clip(event: ClipEvent) -> None:
+    if _CLIP_LOG is not None and not _CLIP_ALLOWED:
+        _CLIP_LOG.append(event)
+
+
+def clipping_allowed(func):
+    """Decoratore: il taglio prodotto dalla funzione è voluto (canvas 132→80)."""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        with allow_clipping():
+            return func(*args, **kwargs)
+    return wrapper
+
+
+def _caller() -> str:
+    """Primo fotogramma fuori da questo file, per attribuire il clipping."""
+    frame = sys._getframe(1)
+    while frame is not None:
+        if not frame.f_code.co_filename.endswith("cell/buffer.py"):
+            return (f"{frame.f_globals.get('__name__', '?')}:"
+                    f"{frame.f_code.co_name}:{frame.f_lineno}")
+        frame = frame.f_back
+    return "?"
+
+
+def audit_active() -> bool:
+    return _CLIP_LOG is not None
+
+
 class CellBuffer:
     """Matrice di celle con clipping silenzioso, come il video originale."""
 
@@ -90,6 +174,15 @@ class CellBuffer:
               underline: bool | None = None,
               limit: int | None = None) -> int:
         """Scrive testo e ritorna la colonna successiva (clippata)."""
+        if _CLIP_LOG is not None and text:
+            if not 0 <= row < self.height:
+                _record_clip(ClipEvent("write-row", row, col, text, _caller()))
+            elif col < 0:
+                _record_clip(ClipEvent("write-left", row, col, text, _caller()))
+            else:
+                shown = text if limit is None else text[:limit]
+                if col + len(shown) > self.width:
+                    _record_clip(ClipEvent("write-right", row, col, text, _caller()))
         if not 0 <= row < self.height:
             return col
         style = self.get(row, col).styled(
@@ -111,6 +204,13 @@ class CellBuffer:
                   char: str = " ", *, fg: int | None = None, bg: int | None = None,
                   blink: bool | None = None, bold: bool | None = None,
                   underline: bool | None = None) -> None:
+        if _CLIP_LOG is not None and height > 0 and width > 0:
+            if row < 0 or row + height > self.height:
+                _record_clip(ClipEvent("fill-row", row, col,
+                                       f"{height}x{width}", _caller()))
+            if col < 0 or col + width > self.width:
+                _record_clip(ClipEvent("fill-col", row, col,
+                                       f"{height}x{width}", _caller()))
         for r in range(row, min(row + height, self.height)):
             if r < 0:
                 continue

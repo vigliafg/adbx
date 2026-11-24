@@ -666,8 +666,8 @@ class SearchSession:
                          self.status or "TAB next column   F4 sort order   "
                                         "F10 continue")
         draw_help_line(buffer, self.theme,
-                       "F2 fields   F3 operators   F4 sort   F7 use last   "
-                       "F8 desc   F9 expression   F10 continue")
+                       "F2 fields   F3 operators   F7 last   F8 desc   "
+                       "F9 expression   F10 continue")
         regions.extend(draw_menu_line(buffer, self.theme, SEARCH_KEYS))
         return regions
 

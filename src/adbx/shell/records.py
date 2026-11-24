@@ -37,20 +37,16 @@ MODE_TITLES = {
 }
 
 MODE_KEYS = {
+    # Righe di menu entro 80 colonne: le voci secondarie stanno nella help line.
     "view": [("F1", "Help"), ("F", "Find"), ("L", "Locate"), ("I", "Index"),
-             ("R", "Range"), ("S", "Replace"), ("E", "Enter"),
-             ("F10", "Continue"), ("F7", "Show deleted"), ("T", "Tools"),
-             ("Alt-M", "Memo"), ("Alt-D", "Delete"), ("Alt-U", "Undelete")],
-    "browse": [("F1", "Help"), ("F", "Find"), ("L", "Locate"), ("I", "Index"),
-               ("R", "Range"), ("E", "Enter"), ("F10", "Continue"),
-               ("F7", "Show deleted"), ("T", "Tools"), ("Alt-M", "Memo"),
-               ("Alt-D", "Delete"), ("Alt-U", "Undelete")],
+             ("R", "Range"), ("E", "Enter"), ("F10", "Continue"),
+             ("Alt-M", "Memo")],
+    "browse": [("F1", "Help"), ("F", "Find"), ("L", "Locate"), ("R", "Range"),
+               ("F7", "Del"), ("F10", "Continue"), ("Alt-M", "Memo")],
     "enter": [("F1", "Help"), ("F3", "Choices"), ("F10", "Save"),
-              ("ESC", "Cancel"), ("Alt-M", "Memo"), ("Alt-F5", "Copy"),
-              ("Alt-F6", "Paste")],
+              ("ESC", "Cancel"), ("Alt-M", "Memo"), ("Alt-F5", "Copy")],
     "change": [("F1", "Help"), ("F3", "Choices"), ("F10", "Save"),
-               ("ESC", "Cancel"), ("Alt-M", "Memo"), ("Alt-F5", "Copy"),
-               ("Alt-F6", "Paste")],
+               ("ESC", "Cancel"), ("Alt-M", "Memo"), ("Alt-F5", "Copy")],
 }
 
 FORM_WORK_TOP = 3

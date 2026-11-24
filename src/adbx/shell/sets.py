@@ -10,7 +10,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ROW, Cell, CellBuffer
+from ..cell.buffer import (
+    Cell,
+    CellBuffer,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    STATUS_ROW,
+    clipping_allowed,
+)
 from ..data import indexing
 from ..data.fields import Field, FieldError, format_value, parse_value
 from ..data.rules import FieldRule
@@ -1487,6 +1494,7 @@ class SetSession:
         draw_menu_line(buffer, self.theme, SET_SESSION_KEYS)
         return View(buffer, [])
 
+    @clipping_allowed
     def _custom_set_form(self) -> View:
         form = self.form
         buffer = CellBuffer(SCREEN_WIDTH, SCREEN_HEIGHT,

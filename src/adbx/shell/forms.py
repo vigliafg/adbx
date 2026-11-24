@@ -10,7 +10,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH, STATUS_ROW, Cell, CellBuffer
+from ..cell.buffer import (
+    Cell,
+    CellBuffer,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    STATUS_ROW,
+    clipping_allowed,
+)
 from ..data.forms import (
     FORM_LETTERS,
     SUMMARY_TYPES,
@@ -739,6 +746,7 @@ class FormDesigner:
                        "ENTER edit/toggle   F10 continue   ESC cancel")
         draw_menu_line(buffer, self.theme, FORM_KEYS)
 
+    @clipping_allowed
     def _view_layout(self, buffer: CellBuffer) -> None:
         assert self.form is not None
         title_bar(buffer, f"{self.title}   Page {self.page + 1} of "

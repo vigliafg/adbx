@@ -43,8 +43,8 @@ EDITOR_KEYS = [("F1", "Help"), ("F2", "Items"), ("F4", "Macro"),
                ("F10", "Continue")]
 PARAM_KEYS = [("F1", "Help"), ("F6", "Banner"), ("F10", "Continue")]
 OUTLINE_TOP = 2
-OUTLINE_ROWS = 14
-DETAIL_TOP = 18
+OUTLINE_ROWS = 10  # righe 2..11 con la griglia 80x25
+DETAIL_TOP = 13
 BANNER_KEYS = [("F1", "Help"), ("F3", "Foreground"), ("F4", "Background"),
                ("F10", "Save"), ("ESC", "Cancel")]
 
@@ -488,7 +488,7 @@ class ApplicationEditor:
                 buffer.write(row, 1, f"{label:<14}:",
                              fg=self.theme.accent if active else self.theme.label,
                              bg=self.theme.bg, bold=active)
-                buffer.write(row, 17, clip_text(text, 100),
+                buffer.write(row, 17, clip_text(text, SCREEN_WIDTH - 18),
                              fg=self.theme.selected_fg if active else self.theme.text,
                              bg=self.theme.selected_bg if active else self.theme.bg)
         draw_status_line(buffer, self.theme, self.status or

@@ -84,3 +84,62 @@ Piano di riferimento: `PLAN-LEGACY.md`.
   anteprima dialog da clampare.
 - Da verificare visivamente gli altri designer (report, label, set, rules,
   applications, printer, documentazione).
+
+## Step 4 — 2026-11-24 — Audit del clipping
+
+Reti di sicurezza permanenti (solo lato test: in produzione il taglio resta
+silenzioso come nel video originale).
+
+- `src/adbx/cell/buffer.py`:
+  - `ClipEvent` + `audit_clipping()`: con il contesto aperto ogni scrittura
+    oltre i bordi finisce in un elenco con tipo, riga, colonna, testo e
+    **punto di codice** del primo chiamante (`_caller()`), così il difetto si
+    attribuisce senza debug manuale.
+  - `allow_clipping()` / `clipping_allowed`: dichiarano voluto il taglio dei
+    canvas più larghi della griglia (form e report salvati a 132 colonne),
+    che devono continuare a funzionare nella variante legacy.
+- `tests/conftest.py`: fixture autouse `no_silent_clipping`, attiva in **tutti**
+  i test, con marker `allow_clipping` per i test che verificano il taglio di
+  proposito (`test_buffer`, due casi di `test_clip_audit`).
+- `tests/test_clip_audit.py`: le 56 viste canoniche (le stesse della cattura
+  UI, overlay compresi) e le schermate del guscio non devono produrre alcun
+  evento; più test unitari dell'audit (bordi esatti, offset negativi, annidamento).
+- `tools/capture_ui.py`: il corpo di `main()` diventa `build_views()`, così la
+  cattura e i test di layout condividono le stesse viste.
+
+### Difetti trovati dall'audit e corretti
+
+L'audit ha trovato 112 scritture fuori griglia in 15 punti:
+
+- `records.MODE_KEYS`: righe di menu di view/browse/enter lunghe fino a 144
+  colonne (la scansione dello step 3 copriva solo le liste `*_KEYS`, non i
+  dizionari). Ora 78/68/66 colonne; F7, Tools, Delete, Undelete, Replace e
+  Alt-F6 Paste passano alla help line, riscritta e accorciata.
+- `record_screens._form_hint`: help line da 83 a ≤78 colonne.
+- Dialog designer (`scripts.py`): impostazioni a sinistra (col 1-27),
+  anteprima a destra (col 30, righe 1-10), tabella Controls a tutta larghezza
+  (righe 11-20) con colonne calcolate; prima le colonne da 72 a 117 erano
+  invisibili.
+- Debugger (`scripts.py`): sorgente 48 colonne + separatrice a 50, variabili a
+  colonna 53 (erano a 98, invisibili), righe derivate da `STATUS_ROW`.
+- Posting rules: colonne da 98 a 76 totali, intestazioni accorciate.
+- Field rules: `Type` spostato a colonna 68 con clip sul valore.
+- Report designer: il canvas di stampa (fino a 240 colonne) è marcato
+  `@clipping_allowed` — il taglio è voluto.
+- Applications editor: outline 10 righe (era 14), dettaglio da riga 13, sette
+  campi fino a riga 20; prima l'ultimo campo finiva a riga 25 (fuori schermo).
+- Searching: help line da 84 a 75 colonne.
+- Documentation: `Source: <path>` clippato; righe del report derivate dalla
+  griglia (erano fino a 36 righe × 128 colonne).
+- Form/set/record custom form: `@clipping_allowed` sui tre renderer; i form
+  demo della cattura sono ora larghi 78 colonne.
+
+### Verifica di questo step
+
+- `pytest`: **517 test verdi** (511 + 6 nuovi).
+- Audit: **0 eventi** sulle 56 viste canoniche e sulle schermate del guscio.
+- `./start.sh --smoke`: `adbx 1.0.0: griglia 80x25, digest 9f8b632350151a12`.
+- Visiva: 55 PNG 880×525 rigenerati e ispezionati (dialog designer, debugger,
+  posting rules, field rules, app editor, documentation, view/browse records);
+  8 E2E 800×475 rigenerati e ispezionati (view records, documentation).
+
