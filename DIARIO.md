@@ -1029,3 +1029,33 @@ Formato:
   su Xvfb e Default settings con «Screen zoom %».
 - CI: Python 3.11–3.13, lint, test, smoke, rendering, E2E, benchmark.
 
+
+---
+
+### 2026-11-24 — Variante legacy — Griglia 80×25
+- Stato: completata
+- Branch/commit: ramo `adbx-legacy` nel worktree `../adbx-legacy`; il ramo
+  principale `adbx` resta al commit `fa845f2` con il working tree invariato.
+- Obiettivo: riportare l'interfaccia alle 80×25 celle dell'originale DOS
+  mantenendo parità funzionale completa (25 lezioni, suite intera), font
+  scalabile e isolamento dei dati.
+- File toccati: `src/adbx/cell/buffer.py`, `src/adbx/__init__.py`,
+  `src/adbx/app/window.py`, i moduli `shell/` (screens, records, forms,
+  reports, labels, rules, sets, searching, indexes, settings, scripts,
+  applications, widgets), `tools/capture_ui.py`, `tools/e2e_visual.py`,
+  test, specifiche, manuale, README e screenshot.
+- Scelte/deviazioni: griglia logica fissa 80×25 (status 23, help 24, menu 25,
+  area di lavoro 22 righe); titolo `adbx — legacy (80×25)`; pacchetto e
+  versione invariati (`adbx`, `1.0.0`). I valori di stampa non cambiano
+  (report 240 colonne, `page_length=22`, `print_width=80`, etichette 78×20).
+  Il linguaggio di script non espone `screen.width`/`screen.height`: la
+  specifica è stata corretta invece di aggiungere proprietà runtime.
+- Test: **520 verdi**, nessuno saltato; audit del clipping a 0 eventi sulle
+  62 viste canoniche.
+- Screenshot: 62 rendering a 880×525 e 8 E2E a 800×475 rigenerati, manifest e
+  README aggiornati; il riferimento DOSBox `06-alpha-four-dosbox.png` resta
+  invariato.
+- Problemi aperti: nessuno funzionale; `ruff` non è installato in questo
+  ambiente, il controllo di stile non è stato eseguito.
+- Prossimo passo: nessuno, la variante è completa. Dettaglio delle fasi in
+  `DIARIO-LEGACY.md`.

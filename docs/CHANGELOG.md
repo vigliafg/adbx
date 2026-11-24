@@ -2,6 +2,14 @@
 
 ## Non pubblicato
 
+- **Variante legacy 80×25.** Il worktree `adbx-legacy` riporta la griglia alle
+  80×25 celle dell'originale: area di lavoro righe 1–22, status line 23, help
+  line 24, menu line 25. Font TrueType scalabile, zoom 50–200% e fit-to-window
+  invariati; valori di stampa e formati dati invariati; pacchetto `adbx` e
+  versione `1.0.0` invariati. Il titolo della finestra è
+  `adbx — legacy (80×25)`. Schermate, overlay, designer e menu line
+  riadattati alla larghezza di 80 colonne; audit dei test che segnala ogni
+  scrittura fuori griglia non dichiarata.
 - Zoom: `CTRL-+` ora ingrandisce davvero anche quando la finestra era già
   piena. Al 100% il corpo è il massimo che entra; `CTRL-+` allarga la finestra
   fino allo schermo per contenere il corpo maggiore, `CTRL--` torna indietro

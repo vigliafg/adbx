@@ -6,13 +6,17 @@ tastiera e i dump golden. Tutto il resto del programma scrive in un
 
 ## 1. Griglia
 
-- Dimensioni logiche: **132×43** celle (`SCREEN_WIDTH`, `SCREEN_HEIGHT`).
-- Area di lavoro: righe **1–40** (`WORK_ROWS`).
-- Righe convenzionali, ancorate in fondo: **41** status line (`STATUS_ROW`),
-  **42** help line (`HELP_ROW`), **43** menu line (`MENU_ROW`).
+- Dimensioni logiche: **80×25** celle (`SCREEN_WIDTH`, `SCREEN_HEIGHT`), le
+  stesse del modo testo del DOS e di Alpha Four.
+- Area di lavoro: righe **1–22** (`WORK_ROWS`).
+- Righe convenzionali, ancorate in fondo: **23** status line (`STATUS_ROW`),
+  **24** help line (`HELP_ROW`), **25** menu line (`MENU_ROW`).
 - Ogni cella: `Cell(ch, fg, bg, blink, bold)` immutabile.
 - Il clipping è silenzioso, come sul video originale: scrivere fuori bordo non
-  solleva errori e non disegna.
+  solleva errori e non disegna. Nei test un audit (`audit_clipping()`) elenca
+  ogni scrittura tagliata: il taglio è ammesso solo dove è dichiarato
+  (`allow_clipping()` / `@clipping_allowed`), cioè sui canvas di stampa e sui
+  form salvati a 132 colonne.
 - La griglia di stampa è un canvas separato, fino a **240 colonne** (report):
   non è lo schermo.
 - La griglia **non cambia** con la finestra: gli script indirizzano celle
@@ -91,18 +95,19 @@ tastiera e i dump golden. Tutto il resto del programma scrive in un
 Formato testuale stabile, usato per confrontare schermate senza immagini:
 
 ```
-adbx 132x43
-<132 caratteri della riga 1>
+adbx 80x25
+<80 caratteri della riga 1>
 <run-length degli attributi: "count@fg,bg,bold,blink" separati da spazio>
 ...
 ```
 
-Un dump uniforme di una riga è un solo token (`132@7,1,0,0`); le differenze
-sono leggibili in diff. Il dump non dipende dal font né dal ridimensionamento.
+Un dump uniforme di una riga è un solo token (`80@7,1,0,0`); le differenze
+sono leggibili in diff. Il dump completo è di 51 righe: intestazione, 25 righe
+di testo e 25 righe di attributi. Non dipende dal font né dal ridimensionamento.
 
 ## 8. Accettazione O0
 
-- Griglia 132×43 con 16 colori, bold e blink.
+- Griglia 80×25 con 16 colori, bold e blink.
 - Font TrueType incorporato e corpo scelto per riempire la finestra.
 - Cornici continue tra celle adiacenti (verificato sulle giunzioni).
 - Popup con titolo e ombra, compositato su uno strato sottostante.

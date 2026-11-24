@@ -10,12 +10,18 @@ un database relazionale senza programmazione, con regole di campo, set,
 report, script e applicazioni.
 
 adbx **non emula il DOS**. Replica il comportamento di Alpha Four dentro una
-finestra moderna con una griglia di caratteri scalabile **132×43**, font
-TrueType **DejaVu Sans Mono** e motore **SQLite**, su Linux, Windows e macOS.
-I file `.DBF` restano interoperabili.
+finestra moderna con una griglia di caratteri scalabile **80×25** — le stesse
+25 righe e 80 colonne del modo testo DOS — font TrueType **DejaVu Sans Mono** e
+motore **SQLite**, su Linux, Windows e macOS. I file `.DBF` restano
+interoperabili.
+
+Questa è la variante **adbx-legacy**: l'interfaccia a 80×25 dell'originale,
+con il font scalabile e il resto del prodotto invariato. Vive in un worktree
+git dedicato (`adbx-legacy`) accanto alla versione a 132×43, che resta la
+linea principale: stessi test, stesso motore, layout diverso.
 
 > **Stato:** release **1.0.0** — conformità alle 25 lezioni del Tutorial,
-> 485 test verdi, nessun test saltato.
+> 520 test verdi, nessun test saltato.
 
 ![Alpha Four main menu](docs/render/01-main-menu.png)
 
@@ -24,6 +30,7 @@ I file `.DBF` restano interoperabili.
 ## Indice
 
 - [Perché adbx](#perché-adbx)
+- [adbx-legacy](#adbx-legacy)
 - [Funzionalità](#funzionalità)
 - [Requisiti](#requisiti)
 - [Installazione](#installazione)
@@ -64,6 +71,40 @@ semplici e fedeli. adbx segue questa idea fino in fondo:
 - **SQLite** come motore, **`.DBF`** come formato di scambio;
 - **determinismo**: ogni scelta con più esiti ammessi è fissata da un test.
 
+## adbx-legacy
+
+La variante **legacy** riporta l'interfaccia alle **80×25** celle
+dell'originale: area di lavoro righe 1–22, status line 23, help line 24, menu
+line 25. Non è un fork del motore: condivide codice, dati e test con la linea
+principale a 132×43, e cambia solo la geometria della griglia e il reflow
+delle schermate.
+
+- **Worktree separato.** Vive in `../adbx-legacy`, sullo stesso repository git
+  e sul ramo `adbx-legacy`; `adbx` resta intatto. Ogni worktree ha il proprio
+  `.venv`, `config.json`, workspace e `.adbx.sqlite`.
+- **Avvio.** Sempre dalla radice del worktree, perché `start.sh` non cambia
+  directory e i percorsi relativi (`config.json`, dati) seguono la cwd:
+
+  ```bash
+  cd ../adbx-legacy
+  ./start.sh
+  ./start.sh --data ~/dati-legacy
+  ./start.sh --smoke        # adbx 1.0.0: griglia 80x25, digest ...
+  ```
+
+- **Identità.** Il pacchetto resta `adbx` e la versione `1.0.0`; il titolo
+  della finestra è `adbx — legacy (80×25)` e `adbx.VARIANT` vale `legacy`.
+- **Dati.** Se `ADBX_DATA` è impostata, entrambe le copie usano la stessa
+  cartella: per una prova affiancata passare `--data` esplicito. Non usare un
+  comando `adbx` installato globalmente: potrebbe lanciare l'altra copia.
+- **Differenze dichiarate.** I valori di stampa non cambiano (report fino a
+  240 colonne, `page_length=22`, `print_width=80`, etichette 78×20): il canvas
+  di stampa resta più largo dello schermo e il designer dei report lo dichiara
+  nel titolo. I canvas 132 colonne salvati dalla versione larga vengono
+  tagliati al bordo, con clipping dichiarato nei test.
+- **Diario.** Le fasi, le verifiche visive e i limiti accettati sono in
+  [`DIARIO-LEGACY.md`](DIARIO-LEGACY.md).
+
 ## Funzionalità
 
 | Area | Cosa c'è |
@@ -82,7 +123,7 @@ semplici e fedeli. adbx segue questa idea fino in fondo:
 | Script | keystroke, dialog box, menu bar, registrazione, Screen Test, 40+ comandi, variabili, trigger, debugger |
 | Applicazioni | outline, parametri, banner, macro, simulazione, Call-App/GotO-App, password, protezioni |
 | Configurazione | `config.json`, default settings, date europee, 26 driver di stampa, colori per database, documentazione |
-| Qualità | 485 test, 25 lezioni del Tutorial, CI 3.11–3.13, ruff, smoke, E2E visuale, benchmark, screenshot canonici |
+| Qualità | 520 test, 25 lezioni del Tutorial, CI 3.11–3.13, ruff, smoke, E2E visuale, benchmark, screenshot canonici |
 
 ### Anteprime
 
@@ -141,7 +182,7 @@ python -m adbx --data C:\dati
 
 ```bash
 python -m adbx --version     # adbx 1.0.0
-python -m adbx --smoke       # griglia 132x43 e digest
+python -m adbx --smoke       # griglia 80x25 e digest
 ```
 
 ## Avvio rapido
@@ -192,15 +233,17 @@ I nomi dei comandi del main menu sono API della tastiera: la lettera
 maiuscola è la hot key (`V`, `P`, `S`, `I`, `G`, `C`, `D`, `L`, `A`, `U`,
 `O`, `Q`).
 
-La griglia resta **132×43** a ogni dimensione della finestra: cambia il corpo
-del font, non il layout. Il corpo automatico si ferma a **24 px logici** per
-lasciare margini leggibili sugli schermi grandi; `CTRL-+` / `CTRL--` spostano
-lo zoom a passi del 10% (50–200%) e `CTRL-0` lo riporta al 100%. Al 100% il
-testo occupa già tutto lo spazio utile; `CTRL-+` ingrandisce allargando la
-finestra fino allo schermo, e `F11` porta la griglia alla dimensione massima.
-Lo zoom non taglia mai la griglia: oltre il massimo consentito dalla finestra
-il titolo mostra `(max)`. Il livello è salvato in `config.json`
-(`screen_zoom`) e si può modificare anche da `Other → Default settings`.
+La griglia resta **80×25** a ogni dimensione della finestra: cambia il corpo
+del font, non il layout. Le righe 23–25 sono status, help e menu line, come
+nell'originale; l'area di lavoro sono le righe 1–22. Il corpo automatico si
+ferma a **24 px logici** per lasciare margini leggibili sugli schermi grandi;
+`CTRL-+` / `CTRL--` spostano lo zoom a passi del 10% (50–200%) e `CTRL-0` lo
+riporta al 100%. Al 100% il testo occupa già tutto lo spazio utile; `CTRL-+`
+ingrandisce allargando la finestra fino allo schermo, e `F11` porta la griglia
+alla dimensione massima. Lo zoom non taglia mai la griglia: oltre il massimo
+consentito dalla finestra il titolo mostra `(max)`. Il livello è salvato in
+`config.json` (`screen_zoom`) e si può modificare anche da
+`Other → Default settings`.
 
 ## Dati e workspace
 
@@ -388,16 +431,17 @@ adbx/
 │   ├── screen/       tastiera e input Qt
 │   ├── script/       motore di script
 │   └── shell/        controller e schermate
-├── tests/            485 test, 25 lezioni, performance, packaging
+├── tests/            520 test, 25 lezioni, performance, packaging
 ├── docs/
 │   ├── spec/         specifiche tecniche
 │   ├── reference/    inventario e manuali originali
-│   ├── render/       56 screenshot canonici
+│   ├── render/       62 screenshot canonici + riferimento DOSBox
 │   ├── manuale-utente.md
 │   └── CHANGELOG.md
 ├── tools/            capture, benchmark, release, DOSBox
 ├── PLAN.md           piano e architettura
 ├── DIARIO.md         diario delle ondate
+├── DIARIO-LEGACY.md  diario della variante 80×25
 └── start.sh
 ```
 

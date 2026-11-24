@@ -155,3 +155,16 @@ def test_lookup_table_columns_fit_the_grid():
     assert len(widths) == 6
     assert sum(widths) <= SCREEN_WIDTH - 4
     assert widths[0] == 24
+
+
+def test_documentation_describes_the_legacy_grid():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    for name in ("docs/spec/00-motore-celle.md", "docs/spec/01-scalabilita.md",
+                 "docs/spec/03-ambiente-dos-riferimento.md",
+                 "docs/manuale-utente.md"):
+        text = (root / name).read_text(encoding="utf-8")
+        assert "80×25" in text or "80x25" in text, name
+        assert "132×43" not in text, name
+        assert "132x43" not in text, name

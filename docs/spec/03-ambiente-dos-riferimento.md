@@ -54,8 +54,8 @@ EMS, XMS e modalità video sono sufficienti.
 ## 4. Uso come riferimento
 
 - Le schermate vanno confrontate per **contenuto e comportamento**, non per
-  i pixel: adbx usa una griglia 132×43 con font TrueType, l'originale gira
-  a 80×25 nel DOSBox.
+  i pixel: adbx usa una griglia 80×25 con font TrueType, come l'originale
+  nel DOSBox; cambiano le dimensioni della finestra e la nitidezza del testo.
 - Il main menu dell'originale ha una finestra più stretta e un solo bordo;
   adbx conserva la stessa disposizione logica e gli stessi hot key.
 - Avvio di riferimento: `tools/run_alpha4_dosbox.sh` parte in **output TTF**

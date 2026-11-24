@@ -1,8 +1,8 @@
 # Scalabilità dell'interfaccia
 
-Perché la griglia non è più 80×25 a pixel fissi, come vengono scelti i
-caratteri e in che senso l'interfaccia è «fit‑to‑window». Il modello di
-riferimento è la finestra DOS/console di Windows XP.
+Perché la griglia è 80×25 a pixel fissi, come vengono scelti i caratteri e in
+che senso l'interfaccia è «fit‑to‑window». Il modello di riferimento è la
+finestra DOS/console di Windows XP.
 
 ## 1. Come lo faceva Windows XP
 
@@ -47,7 +47,7 @@ finestra come concetti distinti), osservazione diretta della finestra
 | Font | Raster o TrueType (Lucida Console) | **TrueType incorporato**: DejaVu Sans Mono regular/bold, fallback al monospace di sistema |
 | Cella | metriche del font | metriche del font (`advance`, `ascent+descent`) |
 | Dimensione carattere | corpo scelto dall'utente | **corpo automatico** con tetto di leggibilità e **zoom 50–200%** |
-| Griglia | righe/colonne visibili = area / cella | **fissa 132×43**, perché gli script indirizzano celle assolute |
+| Griglia | righe/colonne visibili = area / cella | **fissa 80×25**, perché gli script indirizzano celle assolute |
 | Riempimento | margine ai bordi | griglia centrata; margine nel colore di fondo |
 | Glifi | mai stirati | **mai stirati** |
 | Testo | GDI antialiasato con TrueType | `QPainter` antialiasato, atlante per colore |
@@ -60,16 +60,15 @@ alla geometria logica.
 
 ## 3. Griglia
 
-- **132×43** celle: la larghezza 132 colonne è quella dei modi testo SVGA
-  classici; 43 righe stanno comodamente in una finestra 16:9 alla dimensione
-  di carattere tipica. In alternativa resta possibile 80×25 come tema
-  «compatto», ma non è il default.
-- Righe convenzionali, ancorate in fondo: **41** status line, **42** help
-  line, **43** menu line; area di lavoro nelle righe 1–40.
-- Gli script vedranno `screen.width`/`screen.height` (132/43) e le costanti
-  `STATUS_ROW`, `HELP_ROW`, `MENU_ROW`; le lezioni del Tutorial che citano
-  coordinate 80×25 vanno riadattate, non sono un vincolo.
-- Canvas di stampa separato, come prima: fino a 240 colonne, non è lo schermo.
+- **80×25** celle, le stesse del modo testo del DOS e dello screenshot di
+  riferimento: le schermate originali e le coordinate citate dal Tutorial
+  tornano senza riadattamenti.
+- Righe convenzionali, ancorate in fondo: **23** status line, **24** help
+  line, **25** menu line; area di lavoro nelle righe 1–22.
+- Gli script indirizzano celle assolute e non leggono le dimensioni a
+  runtime: il linguaggio non espone `screen.width`/`screen.height`. Le
+  costanti `STATUS_ROW`, `HELP_ROW`, `MENU_ROW` sono interne al guscio.
+- Canvas di stampa separato: fino a 240 colonne, non è lo schermo.
 
 ## 4. Scelta del corpo
 
@@ -78,7 +77,7 @@ alla geometria logica.
 2. Per ogni corpo si leggono le metriche: `advance` (larghezza cella) e
    `ascent + descent` (altezza cella).
 3. Si sceglie il corpo più grande per cui
-   `132 × advance ≤ larghezza` **e** `43 × altezza ≤ altezza finestra`.
+   `80 × advance ≤ larghezza` **e** `25 × altezza ≤ altezza finestra`.
 4. Il corpo automatico si ferma a **24 px logici** (`COMFORT_FONT_PX`, in
    pixel di dispositivo moltiplicati per il `devicePixelRatio`): su schermi
    molto grandi il testo non diventa enorme e la griglia lascia margini.

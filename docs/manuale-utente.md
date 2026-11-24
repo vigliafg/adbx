@@ -3,7 +3,7 @@
 adbx è un clone funzionale di **Alpha Four versione 3**: un database
 relazionale a finestre di caratteri, senza programmazione, con regole di
 campo, set, report, etichette, lettere, script e applicazioni. Non emula il
-DOS: usa una griglia 132×43, un motore SQLite e file `.DBF` interoperabili.
+DOS: usa una griglia 80×25, un motore SQLite e file `.DBF` interoperabili.
 
 - Licenza MIT.
 - Linux, Windows, macOS; Python 3.11 o successivo.

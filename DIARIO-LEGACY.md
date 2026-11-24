@@ -212,3 +212,37 @@ L'audit ha trovato 112 scritture fuori griglia in 15 punti:
 - `python3 -m adbx --smoke --dump`: prima riga `adbx 80x25`, dump di
   51 righe (la 52ª è la riga di stato dello smoke).
 
+
+## Step 7 — 2026-11-24 — Documentazione allineata alla griglia 80×25
+
+- **README**: introduzione e sezione «Interfaccia e tastiera» riscritte sulla
+  griglia 80×25 (righe 23–25 di chrome, area di lavoro 1–22); nuovo paragrafo
+  **adbx-legacy** con worktree, avvio, identità, isolamento dei dati,
+  differenze dichiarate; conteggio test reale (520) e 62 screenshot.
+- **PLAN.md**: nota di variante in testa, senza toccare la storia delle
+  ondate; rimanda a `PLAN-LEGACY.md` e `DIARIO-LEGACY.md`.
+- **DIARIO.md**: nuova voce datata 2026-11-24 in coda; le voci storiche
+  restano intatte.
+- **docs/CHANGELOG.md**: voce «Variante legacy 80×25» sotto «Non pubblicato»,
+  versione `1.0.0` invariata per i test di packaging.
+- **docs/spec/00-motore-celle.md**: 80×25, area 1–22, status/help/menu
+  23/24/25, dump `adbx 80x25` da 51 righe, nota sull'audit del clipping.
+- **docs/spec/01-scalabilita.md**: il compromesso non è più «132×43 di
+  default, 80×25 alternativo» ma **80×25 fissa** con font scalabile; formula
+  di fit `80 × advance` / `25 × altezza`. La promessa di
+  `screen.width`/`screen.height` è stata **rimossa**: il linguaggio non le
+  espone e la variante legacy non introduce proprietà runtime nuove.
+- **docs/spec/03**, **13** e **docs/manuale-utente.md**: citazioni 132×43 /
+  «l'originale gira a 80×25» corrette.
+- **docs/e2e/README.md**: già a 80×25 e 800×475 dallo step 6, nessuna modifica.
+- Nuovo test `test_documentation_describes_the_legacy_grid`: le specifiche e
+  il manuale devono citare 80×25 e non contenere più 132×43.
+
+### Verifica di questo step
+
+- `pytest`: **521 test verdi**, nessuno saltato.
+- `./start.sh --smoke`: `adbx 1.0.0: griglia 80x25, digest 9f8b632350151a12`.
+- Ispezione visiva di main menu e help a 880×525: tre righe di chrome in
+  fondo, nessun testo tagliato.
+- `grep` finale: nessun riferimento a 132×43 in README, manuale e specifiche,
+  salvo i confronti espliciti con la linea principale e i canvas di stampa.

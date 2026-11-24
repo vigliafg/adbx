@@ -56,7 +56,7 @@ L'editor ha due finestre:
 voce con lo stesso motore degli script (ALT-F3 ferma). `F4` apre il Macro
 Editor multilinea. `F6` apre il banner painter. `F8` simula. `F10` salva.
 
-Il banner painter è una griglia 132×43 con cursore a celle: i caratteri
+Il banner painter è una griglia 80×25 con cursore a celle: i caratteri
 digitati finiscono nel banner, `F3`/`F4` cambiano colore di primo piano e
 sfondo, `F10` salva. I colori sono memorizzati solo dove differiscono da
 quelli di base.

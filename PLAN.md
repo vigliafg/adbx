@@ -14,6 +14,13 @@ La specifica di riferimento è la documentazione originale di Alpha Four v3
 (`Reference Manual`, 25 capitoli + 8 appendici; `Tutorial Manual`, 25 lezioni),
 letta e inventariata in `docs/reference/`.
 
+> **Nota di variante — adbx-legacy.** Questo worktree è la variante a
+> **80×25** celle, la geometria del modo testo DOS dell'originale: area di
+> lavoro righe 1–22, status 23, help 24, menu 25. Il piano e le ondate qui
+> sotto descrivono la linea principale a 132×43 e restano come storia: non
+> vanno riscritti. Il lavoro della variante è in
+> [`PLAN-LEGACY.md`](PLAN-LEGACY.md) e [`DIARIO-LEGACY.md`](DIARIO-LEGACY.md).
+
 ---
 
 ## 1. Principi
