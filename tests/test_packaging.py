@@ -81,7 +81,7 @@ def test_packaging_assets_and_release_workflow():
         assert (ROOT / name).is_file(), name
     workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
         encoding="utf-8")
-    for token in ("ubuntu-22.04", "windows-2022", "macos-14",
+    for token in ("ubuntu-22.04", "windows-2022", "macos-latest",
                   "tools/package.py", "SHA256SUMS"):
         assert token in workflow, token
     script = ROOT / "tools" / "package.py"

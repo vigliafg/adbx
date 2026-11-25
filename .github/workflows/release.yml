@@ -95,8 +95,8 @@ jobs:
           if-no-files-found: error
 
   macos:
-    name: macOS (.dmg Apple Silicon)
-    runs-on: macos-14
+    name: macOS (.dmg)
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
