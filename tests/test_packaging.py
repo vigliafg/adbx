@@ -107,3 +107,16 @@ def test_frozen_environment_is_noop_outside_bundle(monkeypatch):
 
     monkeypatch.delattr(__main__.sys, "frozen", raising=False)
     assert __main__.prepare_frozen_environment() is False
+
+
+def test_release_notes_extract_the_version_section():
+    import importlib.util
+
+    path = ROOT / "tools" / "release_notes.py"
+    spec = importlib.util.spec_from_file_location("release_notes", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    changelog = (ROOT / "docs" / "CHANGELOG.md").read_text(encoding="utf-8")
+    body = module.section(changelog, "0.10.0")
+    assert body.startswith("- **Variante legacy 80×25.**")
+    assert module.section("## 1.0.0\ncontenuto\n", "9.9.9") == ""

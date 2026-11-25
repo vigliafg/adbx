@@ -16,7 +16,7 @@ CHANGELOG = ROOT / "docs" / "CHANGELOG.md"
 
 def section(text: str, version: str) -> str:
     pattern = re.compile(
-        r"^##\s+" + re.escape(version) + r"\s*$\n(.*?)(?=^##\s|\Z)",
+        r"^##\s+" + re.escape(version) + r"\b[^\n]*\n(.*?)(?=^##\s|\Z)",
         re.MULTILINE | re.DOTALL,
     )
     match = pattern.search(text)

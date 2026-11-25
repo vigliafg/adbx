@@ -22,7 +22,7 @@ e nasce da un worktree git (`adbx-legacy`) della versione a 132×43, che resta l
 linea principale: stessi test, stesso motore, layout diverso.
 
 > **Stato:** release **0.10.0** (linea legacy) — conformità alle 25 lezioni
-> del Tutorial, 524 test verdi, nessun test saltato. Installer e pacchetti
+> del Tutorial, 525 test verdi, nessun test saltato. Installer e pacchetti
 > per Windows, macOS e Linux in [Releases](https://github.com/vigliafg/adbx-legacy/releases).
 
 ![Alpha Four main menu](docs/render/01-main-menu.png)
@@ -127,7 +127,7 @@ delle schermate.
 | Script | keystroke, dialog box, menu bar, registrazione, Screen Test, 40+ comandi, variabili, trigger, debugger |
 | Applicazioni | outline, parametri, banner, macro, simulazione, Call-App/GotO-App, password, protezioni |
 | Configurazione | `config.json`, default settings, date europee, 26 driver di stampa, colori per database, documentazione |
-| Qualità | 524 test, 25 lezioni del Tutorial, CI 3.11–3.13, ruff, smoke, E2E visuale, benchmark, screenshot canonici |
+| Qualità | 525 test, 25 lezioni del Tutorial, CI 3.11–3.13, ruff, smoke, E2E visuale, benchmark, screenshot canonici |
 
 ### Anteprime
 
@@ -459,7 +459,7 @@ adbx/
 │   ├── screen/       tastiera e input Qt
 │   ├── script/       motore di script
 │   └── shell/        controller e schermate
-├── tests/            524 test, 25 lezioni, performance, packaging
+├── tests/            525 test, 25 lezioni, performance, packaging
 ├── docs/
 │   ├── spec/         specifiche tecniche
 │   ├── reference/    inventario e manuali originali
