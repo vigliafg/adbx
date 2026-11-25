@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=adbx legacy
+GenericName=Database
+Comment=Clone funzionale di Alpha Four v3 (griglia 80x25)
+Exec=adbx-legacy %U
+Icon=adbx-legacy
+Terminal=false
+Categories=Office;Database;
+Keywords=alpha-four;database;sqlite;retro;dbf;
+StartupNotify=true
+StartupWMClass=adbx-legacy

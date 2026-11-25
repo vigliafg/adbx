@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adbx"
-version = "1.0.0"
+version = "0.10.0"
 description = "Clone funzionale moderno di Alpha Four v3: database a celle di caratteri su SQLite (variante legacy 80x25)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -28,7 +28,8 @@ dev = ["pytest>=7.2", "ruff>=0.4"]
 adbx = "adbx.__main__:main"
 
 [project.urls]
-Documentation = "https://github.com/vigliafg/adbx/blob/main/README.md"
+Documentation = "https://github.com/vigliafg/adbx-legacy/blob/main/README.md"
+Release = "https://github.com/vigliafg/adbx-legacy/releases"
 
 [tool.setuptools.packages.find]
 where = ["src"]

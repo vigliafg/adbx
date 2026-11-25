@@ -9,7 +9,31 @@ import sys
 from . import __version__
 
 
+def prepare_frozen_environment() -> bool:
+    """Adatta stdio e cartella dati quando gira un eseguibile pacchettizzato.
+
+    L'eseguibile finestrato di Windows non ha console: `sys.stdout` è `None` e
+    un `print` farebbe fallire anche `--version` o `--smoke`. Inoltre la
+    cartella di installazione può essere in sola lettura, quindi la
+    configurazione va nella cartella utente. Restituisce True se l'app è
+    pacchettizzata.
+    """
+    import os
+
+    if not getattr(sys, "frozen", False):
+        return False
+    for name in ("stdout", "stderr"):
+        if getattr(sys, name) is None:
+            setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
+    if "ADBX_DATA" not in os.environ:
+        from .config.paths import user_data_dir
+
+        os.environ["ADBX_DATA"] = str(user_data_dir())
+    return True
+
+
 def main(argv: list[str] | None = None) -> int:
+    prepare_frozen_environment()
     parser = argparse.ArgumentParser(prog="adbx", description="Alpha Four v3 clone")
     parser.add_argument("--version", action="version", version=f"adbx {__version__}")
     parser.add_argument("--smoke", action="store_true",

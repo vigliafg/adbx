@@ -1,4 +1,4 @@
-"""O13 — packaging e documentazione della release 1.0."""
+"""O13 — packaging e documentazione della release."""
 
 from pathlib import Path
 
@@ -8,10 +8,10 @@ from adbx.shell import messages
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_release_version_is_one_zero():
-    assert __version__ == "1.0.0"
+def test_release_version_is_consistent():
+    assert __version__ == "0.10.0"
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'version = "1.0.0"' in pyproject
+    assert 'version = "0.10.0"' in pyproject
     assert 'adbx = "adbx.__main__:main"' in pyproject
 
 
@@ -20,7 +20,7 @@ def test_user_documentation_and_changelog():
     changelog = ROOT / "docs" / "CHANGELOG.md"
     assert manual.is_file() and manual.stat().st_size > 4000
     assert changelog.is_file()
-    assert "1.0.0" in changelog.read_text(encoding="utf-8")
+    assert "0.10.0" in changelog.read_text(encoding="utf-8")
     text = manual.read_text(encoding="utf-8")
     for topic in ("Installazione", "Script", "Applicazioni", "Backup",
                   "Differenze dichiarate"):
@@ -67,3 +67,43 @@ def test_message_style_is_uniform():
         assert text == messages.check_style(text)
         assert "  " not in text
         assert text.endswith(".") or text.endswith("?") or text.endswith("!")
+
+
+def test_packaging_assets_and_release_workflow():
+    for name in ("packaging/adbx.spec", "packaging/entry.py",
+                 "packaging/windows/installer.nsi",
+                 "packaging/linux/AppRun",
+                 "packaging/linux/adbx-legacy.desktop",
+                 "packaging/icons/adbx-legacy.ico",
+                 "packaging/icons/adbx-legacy.icns",
+                 "packaging/icons/adbx-legacy.png",
+                 "tools/package.py"):
+        assert (ROOT / name).is_file(), name
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8")
+    for token in ("ubuntu-22.04", "windows-2022", "macos-14",
+                  "tools/package.py", "SHA256SUMS"):
+        assert token in workflow, token
+    script = ROOT / "tools" / "package.py"
+    assert script.stat().st_mode & 0o111
+
+
+def test_frozen_user_data_dir():
+    from pathlib import Path
+
+    from adbx.config.paths import user_data_dir
+
+    assert user_data_dir("win32", {"APPDATA": "C:/Roaming"}) == \
+        Path("C:/Roaming") / "adbx-legacy"
+    assert user_data_dir("linux", {"XDG_DATA_HOME": "/data"}) == \
+        Path("/data") / "adbx-legacy"
+    assert user_data_dir("linux", {}).parts[-3:] == \
+        (".local", "share", "adbx-legacy")
+    assert user_data_dir("darwin", {}).name == "adbx-legacy"
+
+
+def test_frozen_environment_is_noop_outside_bundle(monkeypatch):
+    from adbx import __main__
+
+    monkeypatch.delattr(__main__.sys, "frozen", raising=False)
+    assert __main__.prepare_frozen_environment() is False

@@ -4,7 +4,7 @@
 (132x43) senza cambiare nome del pacchetto ne' versione.
 """
 
-__version__ = "1.0.0"
+__version__ = "0.10.0"
 VARIANT = "legacy"
 GRID_WIDTH = 80
 GRID_HEIGHT = 25

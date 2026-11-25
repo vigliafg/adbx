@@ -1,7 +1,7 @@
 # adbx
 
 [![CI](https://github.com/vigliafg/adbx-legacy/actions/workflows/ci.yml/badge.svg)](https://github.com/vigliafg/adbx-legacy/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)](docs/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.10.0-blue)](docs/CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](pyproject.toml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -21,8 +21,9 @@ pubblico dedicato, [vigliafg/adbx-legacy](https://github.com/vigliafg/adbx-legac
 e nasce da un worktree git (`adbx-legacy`) della versione a 132×43, che resta la
 linea principale: stessi test, stesso motore, layout diverso.
 
-> **Stato:** release **1.0.0** — conformità alle 25 lezioni del Tutorial,
-> 521 test verdi, nessun test saltato.
+> **Stato:** release **0.10.0** (linea legacy) — conformità alle 25 lezioni
+> del Tutorial, 524 test verdi, nessun test saltato. Installer e pacchetti
+> per Windows, macOS e Linux in [Releases](https://github.com/vigliafg/adbx-legacy/releases).
 
 ![Alpha Four main menu](docs/render/01-main-menu.png)
 
@@ -92,10 +93,10 @@ delle schermate.
   ../adbx-legacy/start-legacy.sh          # da qualunque directory
   cd ../adbx-legacy && ./start.sh         # equivalente
   ./start.sh --data ~/dati-legacy
-  ./start.sh --smoke        # adbx 1.0.0: griglia 80x25, digest ...
+  ./start.sh --smoke        # adbx 0.10.0: griglia 80x25, digest ...
   ```
 
-- **Identità.** Il pacchetto resta `adbx` e la versione `1.0.0`; il titolo
+- **Identità.** Il pacchetto resta `adbx` e la versione `0.10.0`; il titolo
   della finestra è `adbx — legacy (80×25)` e `adbx.VARIANT` vale `legacy`.
 - **Dati.** Se `ADBX_DATA` è impostata, entrambe le copie usano la stessa
   cartella: per una prova affiancata passare `--data` esplicito. Non usare un
@@ -126,7 +127,7 @@ delle schermate.
 | Script | keystroke, dialog box, menu bar, registrazione, Screen Test, 40+ comandi, variabili, trigger, debugger |
 | Applicazioni | outline, parametri, banner, macro, simulazione, Call-App/GotO-App, password, protezioni |
 | Configurazione | `config.json`, default settings, date europee, 26 driver di stampa, colori per database, documentazione |
-| Qualità | 521 test, 25 lezioni del Tutorial, CI 3.11–3.13, ruff, smoke, E2E visuale, benchmark, screenshot canonici |
+| Qualità | 524 test, 25 lezioni del Tutorial, CI 3.11–3.13, ruff, smoke, E2E visuale, benchmark, screenshot canonici |
 
 ### Anteprime
 
@@ -150,11 +151,35 @@ delle schermate.
 
 ## Installazione
 
+### Release pronte all'uso
+
+Gli artefatti sono costruiti dal workflow `release.yml` e pubblicati su
+[GitHub Releases](https://github.com/vigliafg/adbx-legacy/releases) con i
+checksum SHA-256 (`SHA256SUMS.txt`).
+
+| Piattaforma | File | Note |
+|---|---|---|
+| Windows 10/11 x64 | `adbx-legacy-0.10.0-windows-x64-setup.exe` | installer NSIS: collegamenti a menu Start e desktop, disinstallatore, voce in App e funzionalità |
+| Windows 10/11 x64 | `adbx-legacy-0.10.0-windows-x64-portable.zip` | eseguibile PyInstaller senza installazione |
+| macOS (Apple Silicon) | `adbx-legacy-0.10.0-macos-arm64.dmg` | trascinare `adbx-legacy.app` in Applicazioni |
+| Linux x86_64 (Debian/Ubuntu) | `adbx-legacy_0.10.0_amd64.deb` | `sudo apt install ./adbx-legacy_0.10.0_amd64.deb` |
+| Linux x86_64 (universale) | `adbx-legacy-0.10.0-linux-x86_64.AppImage` | `chmod +x` e avvio |
+| Linux x86_64 | `adbx-legacy-0.10.0-linux-x86_64.tar.gz` | archivio portabile |
+
+I pacchetti non sono firmati: al primo avvio Windows SmartScreen chiede
+*Ulteriori informazioni → Esegui comunque*, mentre su macOS serve
+`xattr -dr com.apple.quarantine /Applications/adbx-legacy.app` (oppure
+tasto destro → *Apri*). La cartella dati dell'app installata è
+`%APPDATA%\adbx-legacy` su Windows, `~/Library/Application Support/adbx-legacy`
+su macOS e `$XDG_DATA_HOME/adbx-legacy` (di norma
+`~/.local/share/adbx-legacy`) su Linux; `ADBX_DATA` e `--data` la
+sovrascrivono.
+
 ### Avvio senza installazione manuale
 
 ```bash
-git clone https://github.com/vigliafg/adbx.git
-cd adbx
+git clone https://github.com/vigliafg/adbx-legacy.git
+cd adbx-legacy
 ./start.sh
 ```
 
@@ -184,7 +209,7 @@ python -m adbx --data C:\dati
 ### Verifica
 
 ```bash
-python -m adbx --version     # adbx 1.0.0
+python -m adbx --version     # adbx 0.10.0
 python -m adbx --smoke       # griglia 80x25 e digest
 ```
 
@@ -434,14 +459,15 @@ adbx/
 │   ├── screen/       tastiera e input Qt
 │   ├── script/       motore di script
 │   └── shell/        controller e schermate
-├── tests/            521 test, 25 lezioni, performance, packaging
+├── tests/            524 test, 25 lezioni, performance, packaging
 ├── docs/
 │   ├── spec/         specifiche tecniche
 │   ├── reference/    inventario e manuali originali
 │   ├── render/       62 screenshot canonici + riferimento DOSBox
 │   ├── manuale-utente.md
 │   └── CHANGELOG.md
-├── tools/            capture, benchmark, release, DOSBox
+├── packaging/        icone, desktop entry, script NSIS, AppRun
+├── tools/            capture, benchmark, release, DOSBox, package
 ├── PLAN.md           piano e architettura
 ├── DIARIO.md         diario delle ondate
 ├── DIARIO-LEGACY.md  diario della variante 80×25
@@ -458,6 +484,7 @@ python -m adbx --smoke
 QT_QPA_PLATFORM=offscreen python tools/capture_ui.py --out /tmp/render
 python tools/benchmark.py --records 5000
 tools/build_release.sh
+python tools/package.py auto     # pacchetti della piattaforma corrente
 ```
 
 La suite include:

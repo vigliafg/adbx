@@ -1,0 +1,4 @@
+#!/bin/sh
+# AppRun di adbx-legacy per AppImage.
+HERE="$(dirname "$(readlink -f "$0")")"
+exec "$HERE/usr/lib/adbx-legacy/adbx-legacy" "$@"

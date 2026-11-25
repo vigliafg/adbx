@@ -19,7 +19,7 @@ def test_smoke_dump(capsys):
 def test_legacy_identity():
     from adbx import GRID_HEIGHT, GRID_WIDTH, VARIANT, WINDOW_TITLE, __version__
 
-    assert __version__ == "1.0.0"
+    assert __version__ == "0.10.0"
     assert VARIANT == "legacy"
     assert (GRID_WIDTH, GRID_HEIGHT) == (80, 25)
     assert WINDOW_TITLE == "adbx — legacy (80×25)"

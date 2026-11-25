@@ -1,4 +1,4 @@
-# adbx 1.0 — manuale utente
+# adbx legacy 0.10 — manuale utente
 
 adbx è un clone funzionale di **Alpha Four versione 3**: un database
 relazionale a finestre di caratteri, senza programmazione, con regole di
@@ -12,6 +12,26 @@ DOS: usa una griglia 80×25, un motore SQLite e file `.DBF` interoperabili.
 ---
 
 ## 1. Installazione e avvio
+
+### Pacchetti pronti
+
+Da [Releases](https://github.com/vigliafg/adbx-legacy/releases) si scarica:
+
+- **Windows** — `adbx-legacy-0.10.0-windows-x64-setup.exe` (installer NSIS
+  con collegamenti e disinstallatore) oppure il `...-portable.zip`;
+- **macOS Apple Silicon** — `adbx-legacy-0.10.0-macos-arm64.dmg`, da aprire e
+  trascinare in Applicazioni;
+- **Linux** — `adbx-legacy_0.10.0_amd64.deb` (`sudo apt install ./file.deb`)
+  oppure l'AppImage (`chmod +x`, poi doppio clic).
+
+I pacchetti non sono firmati: Windows SmartScreen chiede *Esegui comunque*,
+macOS richiede tasto destro → *Apri* (o `xattr -dr
+com.apple.quarantine /Applications/adbx-legacy.app`). La cartella dati
+dell'app installata è quella utente (`%APPDATA%\adbx-legacy`,
+`~/Library/Application Support/adbx-legacy`, `~/.local/share/adbx-legacy`);
+`ADBX_DATA` e `--data` la sovrascrivono.
+
+### Dal sorgente
 
 ```bash
 git clone <repository> adbx
