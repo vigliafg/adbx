@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import sys
 from contextlib import contextmanager
-from functools import wraps
 from dataclasses import dataclass, replace
+from functools import wraps
 from typing import Iterator
 
 from .attrs import DEFAULT_BG, DEFAULT_FG, bright, resolve_color

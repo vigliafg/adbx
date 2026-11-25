@@ -11,11 +11,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..cell.buffer import (
-    Cell,
-    CellBuffer,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
     STATUS_ROW,
+    Cell,
+    CellBuffer,
     clipping_allowed,
 )
 from ..data import indexing
@@ -37,11 +37,11 @@ from .theme import NEWPORT, Theme
 from .widgets import (
     View,
     clip_text,
-    visible_rows,
     draw_help_line,
     draw_menu_line,
     draw_status_line,
     title_bar,
+    visible_rows,
 )
 
 SET_KEYS = [("F1", "Help"), ("F5", "Detach"), ("F6", "Add link"),

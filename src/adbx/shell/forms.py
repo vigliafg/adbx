@@ -11,11 +11,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..cell.buffer import (
-    Cell,
-    CellBuffer,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
     STATUS_ROW,
+    Cell,
+    CellBuffer,
     clipping_allowed,
 )
 from ..data.forms import (
@@ -36,11 +36,11 @@ from .theme import NEWPORT, Theme
 from .widgets import (
     View,
     clip_text,
-    visible_rows,
     draw_help_line,
     draw_menu_line,
     draw_status_line,
     title_bar,
+    visible_rows,
 )
 
 # Limiti della pagina di design nella griglia legacy 80x25.

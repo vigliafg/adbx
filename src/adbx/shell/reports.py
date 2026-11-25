@@ -12,11 +12,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..cell.buffer import (
-    Cell,
-    CellBuffer,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
     STATUS_ROW,
+    Cell,
+    CellBuffer,
     clipping_allowed,
 )
 from ..data.fields import Field
@@ -51,11 +51,11 @@ from .theme import NEWPORT, Theme
 from .widgets import (
     View,
     clip_text,
-    visible_rows,
     draw_help_line,
     draw_menu_line,
     draw_status_line,
     title_bar,
+    visible_rows,
 )
 
 # Compatte per stare in 80 colonne: Alt-O resta nella help line.

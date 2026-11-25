@@ -15,11 +15,11 @@ from .widgets import (
     Region,
     View,
     clip_text,
-    visible_rows,
     draw_help_line,
     draw_menu_line,
     draw_status_line,
     title_bar,
+    visible_rows,
 )
 
 INDEX_KEYS = [("F1", "Help"), ("F2", "Fields"), ("F5", "Delete level"),

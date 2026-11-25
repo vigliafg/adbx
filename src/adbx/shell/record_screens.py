@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from ..cell.buffer import (
-    Cell,
-    CellBuffer,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
     STATUS_ROW,
+    Cell,
+    CellBuffer,
     clipping_allowed,
 )
 from ..data.fields import format_value

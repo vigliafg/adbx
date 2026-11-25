@@ -76,7 +76,6 @@ from adbx.script import (  # noqa: E402
     ScriptStore,
 )
 from adbx.shell import screens  # noqa: E402
-from adbx.shell.widgets import View  # noqa: E402
 from adbx.shell.applications import (  # noqa: E402
     ApplicationEditor,
     ApplicationSession,
@@ -121,6 +120,7 @@ from adbx.shell.settings import (  # noqa: E402
 from adbx.shell.state import demo_state  # noqa: E402
 from adbx.shell.transfer import TransferSession  # noqa: E402
 from adbx.shell.utilities import UtilitySession  # noqa: E402
+from adbx.shell.widgets import View  # noqa: E402
 
 
 def _fresh(view: View) -> View:

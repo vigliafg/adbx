@@ -23,11 +23,11 @@ from .theme import NEWPORT, Theme
 from .widgets import (
     View,
     clip_text,
-    visible_rows,
     draw_help_line,
     draw_menu_line,
     draw_status_line,
     title_bar,
+    visible_rows,
 )
 
 LABEL_KEYS = [("F1", "Help"), ("F2", "Fields"), ("F4", "Calc"),

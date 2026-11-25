@@ -41,11 +41,11 @@ from .widgets import (
     Region,
     View,
     clip_text,
-    visible_rows,
     draw_help_line,
     draw_menu_line,
     draw_status_line,
     title_bar,
+    visible_rows,
 )
 
 RULE_KEYS = [("F1", "Help"), ("F5", "Del rule"), ("F7", "Table/map"),

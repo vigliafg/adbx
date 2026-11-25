@@ -14,7 +14,6 @@ def qapp():
 
 
 def test_renderer_size_and_image(qapp):
-    from adbx.cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
     from adbx.render.qt_renderer import CellRenderer
     from adbx.shell import screens
     from adbx.shell.state import demo_state
@@ -34,7 +33,6 @@ def test_renderer_size_and_image(qapp):
 
 def test_rendering_produces_lit_pixels(qapp):
     from adbx.cell.buffer import CellBuffer
-    from adbx.cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
     from adbx.render.qt_renderer import CellRenderer
 
     buffer = CellBuffer(4, 1)
@@ -53,7 +51,6 @@ def test_rendering_produces_lit_pixels(qapp):
 
 def test_blink_phase_hides_glyph(qapp):
     from adbx.cell.buffer import CellBuffer
-    from adbx.cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
     from adbx.render.qt_renderer import CellRenderer
 
     buffer = CellBuffer(2, 1)
@@ -76,7 +73,6 @@ def test_blink_phase_hides_glyph(qapp):
 
 def test_underline_is_drawn(qapp):
     from adbx.cell.buffer import CellBuffer
-    from adbx.cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
     from adbx.render.qt_renderer import CellRenderer
 
     plain = CellBuffer(6, 1)
@@ -152,7 +148,6 @@ def test_fit_zoom_uses_slack_but_never_overflows(qapp):
 
 
 def test_cells_come_from_font_metrics(qapp):
-    from adbx.cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
     from adbx.render.qt_renderer import CellRenderer
 
     renderer = CellRenderer(pixel_size=20)
@@ -165,7 +160,6 @@ def test_cells_come_from_font_metrics(qapp):
 
 def test_geometric_line_is_continuous(qapp):
     from adbx.cell.buffer import CellBuffer
-    from adbx.cell.buffer import SCREEN_HEIGHT, SCREEN_WIDTH
     from adbx.render.qt_renderer import CellRenderer
 
     buffer = CellBuffer(1, 4)

@@ -17,6 +17,8 @@ TOOLS = ROOT / "tools"
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
+import capture_ui  # noqa: E402
+
 from adbx.cell.buffer import (  # noqa: E402
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
@@ -26,8 +28,6 @@ from adbx.cell.buffer import (  # noqa: E402
 )
 from adbx.shell import screens  # noqa: E402
 from adbx.shell.state import demo_state  # noqa: E402
-
-import capture_ui  # noqa: E402
 
 
 def _fmt(events) -> str:

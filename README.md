@@ -1,6 +1,6 @@
 # adbx
 
-[![CI](https://github.com/vigliafg/adbx/actions/workflows/ci.yml/badge.svg)](https://github.com/vigliafg/adbx/actions/workflows/ci.yml)
+[![CI](https://github.com/vigliafg/adbx-legacy/actions/workflows/ci.yml/badge.svg)](https://github.com/vigliafg/adbx-legacy/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/badge/version-1.0.0-blue)](docs/CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](pyproject.toml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -16,8 +16,9 @@ motore **SQLite**, su Linux, Windows e macOS. I file `.DBF` restano
 interoperabili.
 
 Questa è la variante **adbx-legacy**: l'interfaccia a 80×25 dell'originale,
-con il font scalabile e il resto del prodotto invariato. Vive in un worktree
-git dedicato (`adbx-legacy`) accanto alla versione a 132×43, che resta la
+con il font scalabile e il resto del prodotto invariato. Ha un repository
+pubblico dedicato, [vigliafg/adbx-legacy](https://github.com/vigliafg/adbx-legacy),
+e nasce da un worktree git (`adbx-legacy`) della versione a 132×43, che resta la
 linea principale: stessi test, stesso motore, layout diverso.
 
 > **Stato:** release **1.0.0** — conformità alle 25 lezioni del Tutorial,
