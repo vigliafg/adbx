@@ -13,6 +13,26 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CHANGELOG = ROOT / "docs" / "CHANGELOG.md"
 
+DOWNLOAD = """
+## Installazione
+
+| Piattaforma | File |
+|---|---|
+| Windows 10/11 x64 | `adbx-legacy-{version}-windows-x64-setup.exe` (installer NSIS, disinstallatore incluso) |
+| Windows 10/11 x64 | `adbx-legacy-{version}-windows-x64-portable.zip` |
+| macOS Apple Silicon | `adbx-legacy-{version}-macos-arm64.dmg` |
+| Linux x86_64 (Debian/Ubuntu) | `adbx-legacy_{version}_amd64.deb` |
+| Linux x86_64 (AppImage) | `adbx-legacy-{version}-linux-x86_64.AppImage` |
+| Linux x86_64 (portabile) | `adbx-legacy-{version}-linux-x86_64.tar.gz` |
+
+Verifica i download con `SHA256SUMS.txt`. I pacchetti non sono firmati: su
+Windows SmartScreen chiede *Ulteriori informazioni → Esegui comunque*; su
+macOS serve tasto destro → *Apri* oppure `xattr -dr
+com.apple.quarantine /Applications/adbx-legacy.app`. La cartella dati
+dell'app installata è quella utente (`%APPDATA%\\adbx-legacy`,
+`~/Library/Application Support/adbx-legacy`, `~/.local/share/adbx-legacy`).
+"""
+
 
 def section(text: str, version: str) -> str:
     pattern = re.compile(
@@ -35,6 +55,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(f"# adbx-legacy {version}\n")
     print(body)
+    print(DOWNLOAD.format(version=version))
     return 0
 
 

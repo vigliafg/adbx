@@ -10,7 +10,7 @@
   `adbx — legacy (80×25)`. Schermate, overlay, designer e menu line
   riadattati alla larghezza di 80 colonne; audit dei test che segnala ogni
   scrittura fuori griglia non dichiarata.
-- **Release 0.10.0 multipiattaforma.** Artefatti firmati dal workflow
+- **Release 0.10.0 multipiattaforma.** Artefatti prodotti dal workflow
   `release.yml`: installer Windows NSIS e archivio portabile PyInstaller,
   `.dmg` macOS (Apple Silicon), `.deb` e `.AppImage` Linux x86_64, tarball
   portabile e checksum SHA-256. La numerazione della linea legacy riparte da
